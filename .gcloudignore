@@ -1,0 +1,13 @@
+# .gitignore does NOT govern what gcloud uploads — this file does.
+notes/
+.env
+.env.*
+.git/
+.gitignore
+.venv/
+data/
+tests/
+__pycache__/
+*.pyc
+.pytest_cache/
+.DS_Store

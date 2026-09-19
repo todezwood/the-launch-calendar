@@ -1,0 +1,30 @@
+display_information:
+  name: Launch Calendar
+  description: Tell me what's shipping. I keep the launch calendar straight.
+  background_color: "#1f2937"
+features:
+  app_home:
+    home_tab_enabled: false
+    messages_tab_enabled: true
+    messages_tab_read_only_enabled: false
+  bot_user:
+    display_name: Launch Calendar
+    always_online: true
+oauth_config:
+  scopes:
+    bot:
+      - app_mentions:read
+      - chat:write
+      - im:history
+      - users:read
+      - reactions:write
+settings:
+  # Add after the service is deployed (Bolt answers the URL verification challenge):
+  # event_subscriptions:
+  #   request_url: https://<cloud-run-url>/slack/events
+  #   bot_events:
+  #     - app_mention
+  #     - message.im
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
