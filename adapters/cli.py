@@ -46,7 +46,7 @@ def sender_from(name: str) -> Sender:
 
 def main() -> None:
     load_env()
-    parser = argparse.ArgumentParser(description="Launch Calendar agent (local)")
+    parser = argparse.ArgumentParser(description="Hobbes, the Launch Calendar agent (local)")
     parser.add_argument("--as", dest="who", default=os.environ.get("USER", "someone").title(), help="who is speaking")
     parser.add_argument("--store", choices=["json", "notion"], default=None)
     parser.add_argument("message", nargs="*", help="a message, or: roadmap | risks | history")
@@ -72,7 +72,7 @@ def main() -> None:
 
     if text:
         return say(text)
-    print(f"Launch Calendar agent — speaking as {sender.name}. Ctrl-D to quit.")
+    print(f"Hobbes, the Launch Calendar agent — speaking as {sender.name}. Ctrl-D to quit.")
     while True:
         try:
             line = input("> ").strip()

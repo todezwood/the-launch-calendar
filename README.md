@@ -1,8 +1,8 @@
-# Launch Calendar agent
+# Hobbes — the Launch Calendar agent
 
 **Standardize the agents, not the humans.** People keep announcing launches the way they already do — one messy line in Slack. The agent is the translation layer that turns those lines into one calendar Marketing, Sales, Support, Legal and Leadership can trust without pinging the DRI. v1 goal: visibility into the **roadmap, delivery dates, and risks**.
 
-**Live:** DM `@Launch Calendar` in the demo Slack workspace (invite: _TODO_) · calendar: _TODO public Notion link_ · up through _TODO date_.
+**Live:** DM `@Hobbes` in the demo Slack workspace (invite: _TODO_) · calendar: _TODO public Notion link_ · up through _TODO date_.
 Try it in 60 seconds — DM these and watch the Notion board: `Dropbox connector` → then `next tues` → then `someone said saved views is on hold, not my project`.
 
 ```

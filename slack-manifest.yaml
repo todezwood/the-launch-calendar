@@ -1,6 +1,6 @@
 display_information:
-  name: Launch Calendar
-  description: Tell me what's shipping. I keep the launch calendar straight.
+  name: Hobbes
+  description: Hobbes, the launch calendar agent. Tell me what's shipping and I keep the calendar straight.
   background_color: "#1f2937"
 features:
   app_home:
@@ -8,7 +8,7 @@ features:
     messages_tab_enabled: true
     messages_tab_read_only_enabled: false
   bot_user:
-    display_name: Launch Calendar
+    display_name: Hobbes
     always_online: true
 oauth_config:
   scopes:
