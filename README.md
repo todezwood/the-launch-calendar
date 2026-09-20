@@ -1,44 +1,31 @@
 # Hobbes — the Launch Calendar agent
 
-**Standardize the agents, not the humans.** People keep announcing launches the way they already do — one messy line in Slack. The agent is the translation layer that turns those lines into one calendar Marketing, Sales, Support, Legal and Leadership can trust without pinging the DRI. v1 goal: visibility into the **roadmap, delivery dates, and risks**.
+**Standardize the agents, not the humans.** People announce launches the way they already do — one messy line in Slack — and the agent turns that into a calendar every team can trust without pinging the DRI. v1 goal: visibility into the **roadmap, delivery dates, and risks**.
 
-**Live:** just talk in the launches channel — no @mention, no command (or DM him) — in the demo Slack workspace (tell me who to add) · calendar: [public Notion board](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168).
-Try it in 60 seconds — send these and watch the Notion board: `Dropbox connector` → then, in the thread, just `next tues` → then `someone said saved views is on hold, not my project`.
+**Live:** talk in the launches channel of the demo Slack (no @mention; tell me who to add) and watch the [public Notion calendar](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168) ([screenshot](docs/roadmap.png)). Try `Dropbox connector` → in the thread, `next tues` → `someone said saved views is on hold, not my project`. Seeded launches belong to fictional DRIs, so your change to one is *held as unconfirmed* — the governance rule, working.
 
 ```
-pip install -r requirements.txt && cp .env.example .env     # add ANTHROPIC_API_KEY
-python -m scripts.seed && python -m adapters.cli --as "Alex Kim"   # chat locally (JSON store)
-python -m adapters.cli roadmap                               # or: risks | history
-pytest -v                                                    # one line per judgment call
+pip install -r requirements.txt && cp .env.example .env    # add ANTHROPIC_API_KEY
+python -m scripts.seed && python -m adapters.cli --as "Alex Kim"   # or: roadmap | risks
+pytest -v    # 12 Appendix B messages, 5 bare replies, 5 stakeholder questions; green run: tests/TRANSCRIPT.txt
 ```
-`pytest -v` runs 21 offline rule tests plus the 12 Appendix B messages and their follow-ups against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own. The calls behind the build, and what live use caught, are in `DECISIONS.md`.
 
-## Fields, and why (rationale per field lives in `agent/schema.py`)
-- **Title, DRI, GA date, Status, Release size, Feature brief** — the required set. DRI defaults to whoever announced it. **Status speaks GTM language** (Planned → In Development → Internal → Limited Beta → Open Beta → GA): "can Sales talk about it?" is readable from one word, and beta is its own status. Size = how much go-to-market it needs (S quiet, M support heads-up, L blog + enablement).
-- **Beta date + Audience/rollout** — half the real messages are betas or staged rollouts.
-- **Date confidence** (committed / target / tbd) + **date note** — "about two weeks, assuming nothing breaks" is not a promise, and a withdrawn date becomes an honest blank: Sales' "is that still true?"
-- **Risk level + note, Depends on** — risk is set *by code* on every slip or removed date, and a slip flags every downstream launch.
-- **Needs DRI confirmation + pending change** — the DRI's change applies; anyone else's ("someone said in standup…") is held and shown as unconfirmed.
-- **Change log** (second database, append-only: who, when, field, old → new) — Leadership's "what slipped, and when did we find out?"
-- **Open question / last updated by** — lets a bare `M` or `next tues` land on the right record; shows staleness.
-
-The model gets three narrow tools (create / update / query). Identity, governance, timestamps and history are written by code from the Slack envelope, never by the model. A question never writes. Max 3 changes per message; message text is data, not instructions.
+## Fields, and why (per field: `agent/schema.py`; the calls: `DECISIONS.md`)
+- **Title, DRI, GA date, Status, Release size, Feature brief** — required. **Status speaks GTM language** (Planned → In Development → Internal → Limited Beta → Open Beta → GA): "can Sales talk about it?" is one word. Size = GTM effort (S quiet, M support note, L blog + enablement).
+- **Beta date, Audience** — half the brief's messages are betas or staged rollouts. **Date confidence** — "about two weeks, assuming nothing breaks" is a target, not a promise; a withdrawn date becomes an honest blank.
+- **Risk level, Depends on** — set *by code* on slips and removed dates; slips flag dependents.
+- **Needs DRI confirmation** — hearsay is held, not applied. **Change log** (who, when, old → new) — "what slipped, and when did we find out?"
 
 ## What I left out
-| Left out | Why not v1 | Trigger to revisit |
+| Left out | Why not v1 | Revisit when |
 |---|---|---|
-| Reminders, staleness nudges, notifications | Part 2 scope; trust in the record comes first | Once DRIs rely on it — the change log is already the event feed |
-| Linear/Jira sync | The store is an adapter interface (Notion, JSON today) | First team that lives in an issue tracker |
-| Legal/data-touch flag, goal linkage | Needs Legal's definitions, not my guess | Legal asks their page-1 question of the bot |
-| Approval workflow, permissions | The governance gate covers the real risk | >1 workspace or external readers |
+| Reminders, nudges, notifications | Part 2; trust in the record comes first | DRIs rely on it |
+| Legal/data-touch flag, goal linkage | Needs Legal's definitions, not my guess | Legal asks the bot |
+| Tracker sync, approvals, permissions | Store is an adapter; the DRI gate covers the risk | A team lives in Linear |
 
-## Display: a status-grouped board first, a timeline second
-The calendar is a Notion board grouped by Status, sorted by date, risk shown inline (same view in the CLI). Stakeholders ask "what's coming and what's slipping," not "what's on Tuesday" — and a date grid hides exactly the launches that need eyes: no date, a removed date, an unconfirmed change. So the board is the default view; a Timeline tab answers "when". Notion is both database and display: one source of truth, nothing to sync.
-
-![The Roadmap board: SharePoint marked slipped after a one-line Slack message](docs/roadmap.png)
+## Display: one view per goal
+A Notion **board grouped by Status** (roadmap), a **Timeline** (delivery dates), and **Needs eyes** (risks: slipped, at risk, unconfirmed, undated). The board is the default, not a date grid: a grid hides exactly the launches that need eyes — the ones with no date. Notion is both database and display.
 
 ## Next, and what stayed manual
-1. **Keep-it-fresh loop** (Part 2): weekly "what changed" digest per audience, DRI nudges on stale or past-date records, and the pending-confirmation queue pushed to the DRI instead of waiting on the board.
-2. **An eval, not just tests** — the 12 messages are regression; next is a graded set of real intake messages. 3. **Production shape**: private workspace (no public page), Cloud Tasks + a real database with Notion as mirror at ~10× volume; today concurrent edits are last-write-wins, visible and recoverable via the change log.
-
-Manual today: confirming held changes (DRI replies to the bot), the Notion board view, Slack app install. Cost ≈ $0.05/message. Cold start can take a few seconds — no reply in 30s, resend.
+**Next:** (1) the Part 2 keep-it-fresh loop — "what changed" digests, stale-record nudges, held changes pushed to the DRI; (2) a graded eval of real intake messages; (3) production shape — private workspace, a queue, a real database with Notion as mirror.
+**Manual today:** confirming held changes, DRI reassignment, Notion view setup, Slack install.

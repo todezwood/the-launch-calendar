@@ -74,9 +74,10 @@ def test_same_title_cannot_be_created_twice_even_with_the_override(store):
 def test_a_placeholder_is_not_a_launch(store):
     # Seen live: a garbled second tool call created a record titled "place holder".
     d = Dispatcher(store, PRIYA, NOW)
-    junk = d.call("create_record", {"title": "place holder", "status": "Planned", "confirmed_not_duplicate": True})
+    junk = [d.call("create_record", {"title": title, "status": "Planned", "confirmed_not_duplicate": True})
+            for title in ("place holder", "place")]   # "place" got through in the final audit and ate the change budget
     real = d.call("create_record", {"title": "Audit log export", "status": "Planned", "depends_on": ["null"]})
-    assert not junk["ok"] and real["ok"] and store.get(real["record"]["id"]).depends_on == []
+    assert not any(j["ok"] for j in junk) and real["ok"] and store.get(real["record"]["id"]).depends_on == []
     assert len(store.list()) == SEED_COUNT + 1
 
 

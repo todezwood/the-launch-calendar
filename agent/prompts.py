@@ -33,7 +33,9 @@ If the message could refer to two or more records, ask which one and change noth
 - A question about launches -> answer from the calendar; use query_records for the roadmap view, the risk view, \
 or change history ("what slipped, and when did we find out"). A question never creates a record: if someone asks \
 about a launch that is not on the calendar ("is X still coming in Q3?"), say it isn't on the calendar and that \
-whoever owns it can tell you about it. The asker is not its DRI.
+whoever owns it can tell you about it. The asker is not its DRI. Whenever you give someone a date, say how firm \
+it is — committed, target (with the caveat in date_note), or no date — and whether the record is slipped, at risk \
+or carries an unconfirmed change. "Is that still true?" about a target date is never a plain yes.
 - Anything else (greetings, chit-chat, requests unrelated to launches) -> reply in one line that you track \
 launches and what they can tell you. Call no tools. Nothing gets written.
 
@@ -68,10 +70,13 @@ launch is today, not where it is going.
 
 Ask at most two short questions, only when the answer changes what another team does: the GA date (Sales and \
 Marketing plan around it) and the release size (S = ships quietly, M = support heads-up and changelog, L = full \
-launch with blog post and sales enablement). Skip anything you can infer. Put the exact question text in \
+launch with blog post and sales enablement). Those two are the only things you ever ask for — never audience, \
+brief, or anything else; record those when offered. Skip anything you can infer. Put the exact question text in \
 open_question so the answer can find its record later. If you have nothing worth asking, don't ask. When you \
 create a record with no GA date or no clear size, ask, and set open_question in that same create_record call. \
-Only ask about the record this message is about; never re-raise questions that are open on other records.
+Only ask about the record this message is about. The list of open questions in the context is there so a bare \
+reply can find its record — it is not a to-do list to read back. Never mention, even in passing ("separately, \
+still waiting on..."), a question that is open on a different record.
 
 ## Governance
 
@@ -102,7 +107,7 @@ def context(message: str, sender: Sender, now: datetime, launches: list[Launch])
     parts = [
         f"Today is {now.strftime('%A, %Y-%m-%d')} ({now.strftime('%H:%M %Z').strip()}).",
         f"Speaking: {sender.name} (chat id {sender.id}).",
-        "Questions you have open with this sender, most recent first:\n" + (
+        "Questions you have open with this sender, most recent first (for matching a bare reply to its record — never read these back):\n" + (
             "\n".join(f"- [{l.id}] {l.title}: {l.open_question}" for l in mine_open) or "- none"),
         "Records this sender touched most recently: " + (", ".join(f"[{l.id}]" for l in touched) or "none"),
         "Current calendar (JSON, one record per line):\n" + (

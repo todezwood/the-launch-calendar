@@ -54,6 +54,8 @@ def handle(message: str, sender: Sender, now: datetime, store: Store) -> Reply:
             output_config={"effort": "medium"},
             system=[{"type": "text", "text": prompts.SYSTEM, "cache_control": {"type": "ephemeral"}}],
             tools=TOOLS,
+            # One tool call per turn: the junk records seen in live runs were all garbled *parallel* calls.
+            tool_choice={"type": "auto", "disable_parallel_tool_use": True},
             messages=messages,
         )
         text = "\n".join(b.text for b in response.content if b.type == "text").strip()

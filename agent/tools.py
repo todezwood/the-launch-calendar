@@ -83,6 +83,9 @@ TOOLS = [
             "confirmed_not_duplicate": {"type": "boolean", "description": "Set true only when retrying after a possible-duplicate warning and you are sure this is a different launch."},
         },
         required=["title", "status", "date_confidence", "release_size", "risk_level"],
+        # Not strict: under the strict grammar the model sent only the required fields and patched the rest in
+        # with a second call — a launch whose beta date depends on a follow-up landing. _checked validates it.
+        strict=False,
     ),
     _tool(
         "update_record",
@@ -411,7 +414,7 @@ class Dispatcher:
 
 
 _NEUTRAL = ("unchanged", "unknown", "any", "none")
-_NOT_A_TITLE = ("placeholder", "untitled", "unknown", "none", "null", "tbd", "na", "test", "newlaunch", "launch")
+_NOT_A_TITLE = ("placeholder", "place", "untitled", "unknown", "none", "null", "tbd", "na", "test", "newlaunch", "launch")
 
 
 _TYPES = {"string": str, "boolean": bool, "array": list}
@@ -420,7 +423,7 @@ _TYPES = {"string": str, "boolean": bool, "array": list}
 def _is_blank(value: str) -> bool:
     """Models sometimes fill a field they mean to leave out with a placeholder or stray markup."""
     v = value.strip()
-    return not v or ("<" in v and ">" in v) or v.lower() in ("empty", "n/a", "null", "none", "unused", "unset")
+    return not v or ("<" in v and ">" in v) or v.lower() in ("empty", "n/a", "null", "none", "unused", "unset", "placeholder")
 
 
 def _checked(name: str, args: dict) -> dict:

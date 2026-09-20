@@ -58,6 +58,7 @@ def test_02a_bare_date_reply_lands_on_the_record_that_asked(cal):
     cal.say(ALEX, "next tues")
     dropbox = cal.find("dropbox")
     assert "2026-08-25" in (dropbox.ga_date, dropbox.beta_date) or "2026-09-01" in (dropbox.ga_date, dropbox.beta_date)
+    assert dropbox.date_note   # which Tuesday was assumed is written down, so it can be corrected
     assert len(cal.store.list()) == SEED_COUNT + 2
 
 
@@ -108,7 +109,7 @@ def test_06a_second_size_reply_lands_on_a_record_still_missing_a_size(cal):
     cal.say(ALEX, "S")
     after = {l.id: l.release_size for l in cal.store.list()}
     changed = [i for i in after if after[i] != before.get(i)]
-    assert len(changed) <= 1 and all(after[i] == "S" for i in changed)
+    assert len(changed) == 1 and after[changed[0]] == "S"   # no second chance to ask: the reply is never dropped
     assert len(after) == SEED_COUNT + 6
 
 
@@ -140,7 +141,7 @@ def test_10_scope_change_updates_the_brief_and_leaves_the_date_alone(cal):
     before = (multi.beta_date, multi.ga_date)
     cal.say(ALEX, "the multi-tab work grew — we're pulling in conflict handling as well. date's the same though.")
     after = cal.find("multi")
-    assert "conflict" in after.feature_brief.lower()
+    assert "conflict" in after.feature_brief.lower() and cal.history(after, "feature_brief")
     assert (after.beta_date, after.ga_date) == before
 
 
@@ -194,6 +195,32 @@ def test_a_question_about_a_launch_not_on_the_calendar_creates_nothing(cal):
     count, log = len(cal.store.list()), len(cal.store.list_changes())
     cal.say(JORDAN, "I told a customer the Box connector was coming in Q3. Is that still true?")
     assert (len(cal.store.list()), len(cal.store.list_changes())) == (count, log)
+
+
+# --- The brief's page-1 stakeholder questions: answered from the calendar, never a write ---
+
+def _ask(cal, message):
+    before = (len(cal.store.list()), len(cal.store.list_changes()))
+    reply = cal.say(JORDAN, message)
+    assert (len(cal.store.list()), len(cal.store.list_changes())) == before
+    return reply.text.lower()
+
+
+def test_marketing_question_finds_the_large_launch_in_the_next_three_weeks(cal):
+    assert "connectors platform" in _ask(cal, "What's shipping in the next three weeks that needs a blog post?")
+
+
+def test_support_question_finds_what_lands_next_week(cal):
+    assert "trial" in _ask(cal, "What lands next week that's going to generate tickets?")
+
+
+def test_sales_question_about_a_launch_on_the_calendar_gets_its_date_and_confidence(cal):
+    text = _ask(cal, "I told a customer the Salesforce integration was coming in Q3. Is that still true?")
+    assert "salesforce" in text and "target" in text   # a hedged date is never relayed to Sales as a promise
+
+
+def test_legal_question_writes_nothing_because_data_touch_is_not_tracked_yet(cal):
+    _ask(cal, "Does anything going out this month touch customer data or a new jurisdiction?")
 
 
 def test_never_duplicate_rule_held_for_the_whole_run(cal):
