@@ -39,7 +39,8 @@ This is a regression suite, not an eval. It passed 3/22, 19/22, 21/22, 15/22 (a 
 
 ## 6. Small operational calls
 - **Events API over HTTP on Cloud Run, max one instance.** Scale-to-zero costs cents; one instance makes the in-memory duplicate-event guard authoritative. Trade: a cold start can take a few seconds, shown to the user as a 👀 reaction.
-- **One message at a time** (a lock). Concurrent edits are last-write-wins, and the change log makes that visible and recoverable. Fine at one team's volume; not at ten.
+- **One message at a time** (a lock). Concurrent edits are last-write-wins, and the change log makes that visible and recoverable. Fine at one team's volume; not at ten. The lock is not a queue: in live validation I fired five messages in 25 seconds and a slip was handled before the GA answer sent ahead of it, so the slip moved the beta date and had no GA date to move. At human pace it doesn't happen; the fix is a per-channel FIFO queue.
+- **Validation by use, not just by suite.** Asking the brief's five stakeholder questions found what the 12 messages couldn't: a Sales question about a launch that wasn't on the calendar *created* it, with the asker as DRI. A question now never writes; there is a test for it.
 - **Errors reply with a reference id, never the exception text.** Replies are readable by others.
 - **Secrets in Secret Manager, read by a dedicated service account** with access to those secrets only.
 

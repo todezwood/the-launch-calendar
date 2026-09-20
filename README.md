@@ -11,18 +11,18 @@ python -m scripts.seed && python -m adapters.cli --as "Alex Kim"   # chat locall
 python -m adapters.cli roadmap                               # or: risks | history
 pytest -v                                                    # one line per judgment call
 ```
-`pytest -v` runs 21 offline tests (the rules enforced in code, the Notion mapping, which Slack messages the bot acts on) plus the 12 Appendix B messages (and their follow-ups) against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own (`tests/fixtures/seed.json`). The calls behind the build, including what the live tests caught, are in `DECISIONS.md`.
+`pytest -v` runs 21 offline rule tests plus the 12 Appendix B messages and their follow-ups against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own. The calls behind the build, and what live use caught, are in `DECISIONS.md`.
 
 ## Fields, and why (rationale per field lives in `agent/schema.py`)
 - **Title, DRI, GA date, Status, Release size, Feature brief** — the required set. DRI defaults to whoever announced it. **Status speaks GTM language** (Planned → In Development → Internal → Limited Beta → Open Beta → GA): "can Sales talk about it?" is readable from one word, and beta is its own status. Size = how much go-to-market it needs (S quiet, M support heads-up, L blog + enablement).
-- **Beta date + Audience/rollout** — half the real messages are betas or staged rollouts; a beta slip needs a date to slip.
-- **Date confidence** (committed / target / tbd) + **date note** — "about two weeks, assuming nothing breaks" is not a promise, and a withdrawn date becomes an honest blank. This is Sales' "is that date still true?"
+- **Beta date + Audience/rollout** — half the real messages are betas or staged rollouts.
+- **Date confidence** (committed / target / tbd) + **date note** — "about two weeks, assuming nothing breaks" is not a promise, and a withdrawn date becomes an honest blank: Sales' "is that still true?"
 - **Risk level + note, Depends on** — risk is set *by code* on every slip or removed date, and a slip flags every downstream launch.
-- **Needs DRI confirmation + pending change** — governance. The agent knows who is speaking: the DRI's change applies; anyone else's ("someone said in standup…") is held and shown as unconfirmed, never blindly applied.
+- **Needs DRI confirmation + pending change** — the DRI's change applies; anyone else's ("someone said in standup…") is held and shown as unconfirmed.
 - **Change log** (second database, append-only: who, when, field, old → new) — Leadership's "what slipped, and when did we find out?"
 - **Open question / last updated by** — lets a bare `M` or `next tues` land on the right record; shows staleness.
 
-The model gets three narrow tools (create / update / query). It cannot write identity, governance, timestamps or history — code does that from the Slack envelope. Max 3 changes per message; message text is treated as data, not instructions.
+The model gets three narrow tools (create / update / query). Identity, governance, timestamps and history are written by code from the Slack envelope, never by the model. A question never writes. Max 3 changes per message; message text is data, not instructions.
 
 ## What I left out
 | Left out | Why not v1 | Trigger to revisit |
@@ -33,7 +33,7 @@ The model gets three narrow tools (create / update / query). It cannot write ide
 | Date-grid view, approval workflow, permissions | See display; governance gate covers the real risk | >1 workspace or external readers |
 
 ## Display: a status-grouped board, not a date grid
-The calendar is a Notion board grouped by Status, sorted by date, risk shown inline (same view in the CLI). Stakeholders ask "what's coming and what's slipping," not "what's on Tuesday" — and a date grid hides exactly the launches that need eyes: no date, a removed date, an unconfirmed change. Notion is both database and display: one source of truth, nothing to sync. (Board view is built by hand in ~90 seconds: Board → group by Status → sort by GA date.)
+The calendar is a Notion board grouped by Status, sorted by date, risk shown inline (same view in the CLI). Stakeholders ask "what's coming and what's slipping," not "what's on Tuesday" — and a date grid hides exactly the launches that need eyes: no date, a removed date, an unconfirmed change. Notion is both database and display: one source of truth, nothing to sync.
 
 ## Next, and what stayed manual
 1. **Keep-it-fresh loop** (Part 2): weekly "what changed" digest per audience, DRI nudges on stale or past-date records, and the pending-confirmation queue pushed to the DRI instead of waiting on the board.
