@@ -2,7 +2,7 @@
 
 **Standardize the agents, not the humans.** People keep announcing launches the way they already do — one messy line in Slack. The agent is the translation layer that turns those lines into one calendar Marketing, Sales, Support, Legal and Leadership can trust without pinging the DRI. v1 goal: visibility into the **roadmap, delivery dates, and risks**.
 
-**Live:** just talk in the launches channel — no @mention, no command (or DM him) — in the demo Slack workspace (invite: _TODO_) · calendar: [public Notion board](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168) · up through _TODO date_.
+**Live:** just talk in the launches channel — no @mention, no command (or DM him) — in the demo Slack workspace (tell me who to add) · calendar: [public Notion board](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168).
 Try it in 60 seconds — send these and watch the Notion board: `Dropbox connector` → then, in the thread, just `next tues` → then `someone said saved views is on hold, not my project`.
 
 ```
@@ -30,10 +30,12 @@ The model gets three narrow tools (create / update / query). Identity, governanc
 | Reminders, staleness nudges, notifications | Part 2 scope; trust in the record comes first | Once DRIs rely on it — the change log is already the event feed |
 | Linear/Jira sync | The store is an adapter interface (Notion, JSON today) | First team that lives in an issue tracker |
 | Legal/data-touch flag, goal linkage | Needs Legal's definitions, not my guess | Legal asks their page-1 question of the bot |
-| Date-grid view, approval workflow, permissions | See display; governance gate covers the real risk | >1 workspace or external readers |
+| Approval workflow, permissions | The governance gate covers the real risk | >1 workspace or external readers |
 
-## Display: a status-grouped board, not a date grid
-The calendar is a Notion board grouped by Status, sorted by date, risk shown inline (same view in the CLI). Stakeholders ask "what's coming and what's slipping," not "what's on Tuesday" — and a date grid hides exactly the launches that need eyes: no date, a removed date, an unconfirmed change. Notion is both database and display: one source of truth, nothing to sync.
+## Display: a status-grouped board first, a timeline second
+The calendar is a Notion board grouped by Status, sorted by date, risk shown inline (same view in the CLI). Stakeholders ask "what's coming and what's slipping," not "what's on Tuesday" — and a date grid hides exactly the launches that need eyes: no date, a removed date, an unconfirmed change. So the board is the default view; a Timeline tab answers "when". Notion is both database and display: one source of truth, nothing to sync.
+
+![The Roadmap board: SharePoint marked slipped after a one-line Slack message](docs/roadmap.png)
 
 ## Next, and what stayed manual
 1. **Keep-it-fresh loop** (Part 2): weekly "what changed" digest per audience, DRI nudges on stale or past-date records, and the pending-confirmation queue pushed to the DRI instead of waiting on the board.
