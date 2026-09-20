@@ -197,6 +197,11 @@ class Dispatcher:
         title = a["title"].strip()
         if not title:
             raise ToolError("A record needs a title.")
+        same = [l for l in self.store.list() if l.title.strip().lower() == title.lower()]
+        if same:   # the override below is for look-alikes, never for the same title
+            return {"ok": False, "outcome": "duplicate",
+                    "error": "This record already exists (you may have just created it). Use update_record on it.",
+                    "similar": [{"id": l.id, "title": l.title, "dri": l.dri} for l in same]}
         if not a.get("confirmed_not_duplicate"):
             similar = self.store.find(title)
             if similar:
@@ -296,7 +301,13 @@ class Dispatcher:
         # Risk is derived in code so it cannot be forgotten.
         if launch.ga_date is None and launch.date_confidence != "tbd":
             self._set(launch, "date_confidence", "tbd", changed, note)
-        if "risk_level" not in proposed:
+        slipped = any("slipped" in e for e in date_events)
+        if slipped and launch.risk_level != "slipped":
+            # A date that moved later is a slip, whatever the model called it.
+            self._set(launch, "risk_level", "slipped", changed, note)
+            if not proposed.get("risk_note"):
+                self._set(launch, "risk_note", "; ".join(date_events) + (f" — {note}" if note else ""), changed, "")
+        elif "risk_level" not in proposed:
             if date_events:
                 level = "slipped" if any("slipped" in e for e in date_events) else "at_risk"
                 self._set(launch, "risk_level", level, changed, note)

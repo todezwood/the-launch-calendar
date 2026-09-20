@@ -11,7 +11,7 @@ python -m scripts.seed && python -m adapters.cli --as "Alex Kim"   # chat locall
 python -m adapters.cli roadmap                               # or: risks | history
 pytest -v                                                    # one line per judgment call
 ```
-`pytest -v` runs 9 rule tests offline plus the 12 Appendix B messages against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own (`tests/fixtures/seed.json`).
+`pytest -v` runs 12 rule tests offline plus the 12 Appendix B messages (and their follow-ups) against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own (`tests/fixtures/seed.json`).
 
 ## Fields, and why (rationale per field lives in `agent/schema.py`)
 - **Title, DRI, GA date, Status, Release size, Feature brief** — the required set. DRI defaults to whoever announced it. **Status speaks GTM language** (Planned → In Development → Internal → Limited Beta → Open Beta → GA): "can Sales talk about it?" is readable from one word, and beta is its own status. Size = how much go-to-market it needs (S quiet, M support heads-up, L blog + enablement).

@@ -122,10 +122,10 @@ def test_07_withdrawn_date_is_cleared_not_left_stale(cal):
 
 
 def test_08_slip_updates_existing_record_and_does_not_duplicate(cal):
-    before = cal.find("sharepoint")
+    before = cal.find("sharepoint").beta_date   # copy the value: the store may hand back the same object
     cal.say(ALEX, "sharepoint is slipping, probably a week later")
     after = cal.find("sharepoint")
-    assert after.beta_date > before.beta_date
+    assert after.beta_date > before
     assert after.risk_level == "slipped" and cal.history(after, "beta_date")
 
 
@@ -136,11 +136,12 @@ def test_09_beta_is_its_own_status_and_the_question_gets_answered(cal):
 
 
 def test_10_scope_change_updates_the_brief_and_leaves_the_date_alone(cal):
-    before = cal.find("multi")
+    multi = cal.find("multi")
+    before = (multi.beta_date, multi.ga_date)
     cal.say(ALEX, "the multi-tab work grew — we're pulling in conflict handling as well. date's the same though.")
     after = cal.find("multi")
     assert "conflict" in after.feature_brief.lower()
-    assert (after.beta_date, after.ga_date) == (before.beta_date, before.ga_date)
+    assert (after.beta_date, after.ga_date) == before
 
 
 def test_A_annoyed_dri_correcting_a_stale_record_is_just_fixed(cal):

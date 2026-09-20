@@ -45,6 +45,11 @@ def test_slip_is_logged_with_old_and_new_date_and_marks_record_slipped(store):
     assert record.risk_level == "slipped"
 
 
+def test_model_cannot_soften_a_slip_to_at_risk(store):
+    update(Dispatcher(store, SAM, NOW), "connectors-platform", ga_date="2026-09-04", risk_level="at_risk")
+    assert store.get("connectors-platform").risk_level == "slipped"
+
+
 def test_upstream_slip_flags_every_downstream_launch(store):
     d = Dispatcher(store, SAM, NOW)
     d.call("create_record", {"title": "Box connector", "status": "In Development", "depends_on": ["connectors-platform"],
@@ -54,9 +59,16 @@ def test_upstream_slip_flags_every_downstream_launch(store):
     assert store.get("box-connector").risk_level == "at_risk"
 
 
-def test_creating_a_launch_that_already_exists_is_refused(store):
-    result = Dispatcher(store, PRIYA, NOW).call("create_record", {"title": "Saved Views", "status": "Planned"})
+def test_creating_a_launch_that_looks_like_an_existing_one_is_refused(store):
+    result = Dispatcher(store, PRIYA, NOW).call("create_record", {"title": "Saved views v2", "status": "Planned"})
     assert result["outcome"] == "possible_duplicate" and len(store.list()) == SEED_COUNT
+
+
+def test_same_title_cannot_be_created_twice_even_with_the_override(store):
+    result = Dispatcher(store, PRIYA, NOW).call("create_record", {
+        "title": "saved views", "status": "Planned", "date_confidence": "tbd", "release_size": "unknown",
+        "risk_level": "on_track", "confirmed_not_duplicate": True})
+    assert result["outcome"] == "duplicate" and len(store.list()) == SEED_COUNT
 
 
 def test_one_message_cannot_make_more_than_three_changes(store):
