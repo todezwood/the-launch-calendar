@@ -53,22 +53,36 @@ def _sender(client, user_id: str) -> Sender:
     return Sender(id=user_id, name=_names[user_id])
 
 
+def _bot_id(client) -> str:
+    if not _bot_user:
+        _bot_user.append(client.auth_test()["user_id"])
+    return _bot_user[0]
+
+
 def _in_my_thread(event: dict, client) -> bool:
-    """A reply in a channel thread the bot is already part of needs no @mention: the person
+    """A reply in a channel thread the bot is already part of is addressed to it: the person
     is answering its question. Memory first; after a cold start, ask Slack."""
     key = (event.get("channel", ""), event.get("thread_ts", ""))
     if not key[1]:
         return False
     if key not in _my_threads:
         try:
-            if not _bot_user:
-                _bot_user.append(client.auth_test()["user_id"])
             replies = client.conversations_replies(channel=key[0], ts=key[1], limit=50)["messages"]
-            if any(m.get("user") == _bot_user[0] for m in replies):
+            if any(m.get("user") == _bot_id(client) for m in replies):
                 _my_threads.add(key)
         except Exception:
             return False
     return key in _my_threads
+
+
+def _addressed(event: dict, client) -> bool:
+    """To the bot (a DM, an @mention, a reply in its thread) or merely said near it."""
+    if event.get("channel_type") == "im" or _in_my_thread(event, client):
+        return True
+    try:
+        return f"<@{_bot_id(client)}>" in event.get("text", "")
+    except Exception:
+        return False
 
 
 def _react(client, event: dict, add: str, remove: str | None = None) -> None:
@@ -80,12 +94,13 @@ def _react(client, event: dict, add: str, remove: str | None = None) -> None:
         pass   # a reaction is a nicety, never a reason to fail
 
 
-def _handle(event: dict, client, say) -> None:
+def _handle(event: dict, client, say, overheard: bool = False) -> None:
     if event.get("bot_id") or event.get("subtype") or not event.get("user"):
         return                                  # loop guard: never answer bots, edits, joins
     if not _first_time(event):
         return
-    _react(client, event, "eyes")
+    if not overheard:
+        _react(client, event, "eyes")           # no eyes on overheard chatter: most of it is not for the bot
     started, ref, outcome, error, tools = time.time(), uuid.uuid4().hex[:8], "ok", "", []
     thread = event.get("thread_ts") or (event["ts"] if event.get("channel_type") != "im" else None)
     try:
@@ -94,12 +109,15 @@ def _handle(event: dict, client, say) -> None:
             from agent import engine            # lazy: keeps cold-start ack fast
             _store = _store or open_store()
             text = re.sub(r"<@[A-Z0-9]+>", "", event.get("text", "")).strip()
-            reply = engine.handle(text, _sender(client, event["user"]), datetime.now(TZ), _store)
+            reply = engine.handle(text, _sender(client, event["user"]), datetime.now(TZ), _store, overheard=overheard)
             tools = reply.tools_called
-        say(text=reply.text, thread_ts=thread)
-        if thread:
-            _my_threads.add((event["channel"], thread))
-        _react(client, event, "white_check_mark", remove="eyes")
+        if reply.text:
+            say(text=reply.text, thread_ts=thread)
+            if thread:
+                _my_threads.add((event["channel"], thread))
+            _react(client, event, "white_check_mark", remove=None if overheard else "eyes")
+        else:
+            outcome = "stayed_quiet"            # overheard, and not about a launch
     except Exception as err:
         outcome, error = "error", f"{type(err).__name__}: {err}"
         traceback.print_exc()
@@ -120,5 +138,6 @@ def on_mention(event, client, say):
 def on_message(event, client, say):
     if event.get("bot_id") or event.get("subtype"):
         return
-    if event.get("channel_type") == "im" or _in_my_thread(event, client):
-        _handle(event, client, say)
+    # Every channel message is heard, so nobody has to remember the @. What was not said to the bot
+    # goes in as overheard: launch news is recorded, anything else gets no reply at all.
+    _handle(event, client, say, overheard=not _addressed(event, client))

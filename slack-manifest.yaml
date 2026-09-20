@@ -26,7 +26,7 @@ settings:
   #   bot_events:
   #     - app_mention
   #     - message.im
-  #     - message.channels   # only thread replies to the bot are acted on
+  #     - message.channels   # every channel message is heard; non-launch chatter gets no reply
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

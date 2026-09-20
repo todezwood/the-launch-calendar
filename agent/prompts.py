@@ -8,6 +8,8 @@ from datetime import datetime
 from agent.schema import Launch, Sender
 from agent.tools import compact
 
+NO_REPLY = "NO_REPLY"
+
 SYSTEM = """\
 You are Hobbes, the Launch Calendar agent for a fast-moving software company. People tell you about launches in chat, \
 the way they would tell a colleague: one line, no form, half the details missing. You are the translation layer \
@@ -32,6 +34,11 @@ record for the same launch. If the message could refer to two or more records, a
 or change history ("what slipped, and when did we find out").
 - Anything else (greetings, chit-chat, requests unrelated to launches) -> reply in one line that you track \
 launches and what they can tell you. Call no tools. Nothing gets written.
+
+Sometimes the context says the message was OVERHEARD: posted in the launches channel, not addressed to you. \
+Treat launch news and launch questions exactly as above — people should not need to @mention you. But if an \
+overheard message is anything else (chit-chat, people talking to each other, something you can't tie to a \
+launch), call no tools and reply with exactly NO_REPLY. Nobody asked you; stay out of it.
 
 A message can be both: "X went out yesterday, is beta its own status?" is an update and a question. Do both.
 
@@ -83,7 +90,7 @@ simple bullet lines, no headings, no tables. When a tool returns a rendered view
 """
 
 
-def context(message: str, sender: Sender, now: datetime, launches: list[Launch]) -> str:
+def context(message: str, sender: Sender, now: datetime, launches: list[Launch], overheard: bool = False) -> str:
     # Ties on last_updated (same minute, or a frozen test clock) break by store order: later record = more recent.
     order = {l.id: i for i, l in enumerate(launches)}
     recency = lambda l: (l.last_updated, order[l.id])
@@ -99,6 +106,7 @@ def context(message: str, sender: Sender, now: datetime, launches: list[Launch])
         "Records this sender touched most recently: " + (", ".join(f"[{l.id}]" for l in touched) or "none"),
         "Current calendar (JSON, one record per line):\n" + (
             "\n".join(json.dumps(compact(l), ensure_ascii=False) for l in launches) or "(empty)"),
+        *(["OVERHEARD: this message was posted in the channel, not addressed to you."] if overheard else []),
         f"<message>\n{message}\n</message>",
     ]
     return "\n\n".join(parts)

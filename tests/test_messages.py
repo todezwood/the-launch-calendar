@@ -21,9 +21,9 @@ def cal(tmp_path_factory):
     store = seeded_store(tmp_path_factory.mktemp("cal"))
 
     class Calendar:
-        def say(self, sender, message):
-            reply = engine.handle(message, sender, NOW, store)
-            print(f"\n[{sender.name}] {message}\n[agent] {reply.text}\n[tools] {reply.actions}")
+        def say(self, sender, message, overheard=False):
+            reply = engine.handle(message, sender, NOW, store, overheard=overheard)
+            print(f"\n[{sender.name}]{' (overheard)' if overheard else ''} {message}\n[agent] {reply.text or '(stays quiet)'}\n[tools] {reply.actions}")
             return reply
 
         def find(self, *words):
@@ -184,5 +184,26 @@ def test_leadership_question_is_answered_from_the_change_log(cal):
     assert "query_records" in reply.tools_called and "sharepoint" in reply.text.lower()
 
 
+# --- Overheard in the channel: nobody has to @mention the bot ------------
+
+def test_overheard_chatter_gets_no_reply_at_all(cal):
+    count, log = len(cal.store.list()), len(cal.store.list_changes())
+    for chatter in ("anyone want coffee?", "lol same", "@sam can you review my PR when you get a sec"):
+        reply = cal.say(JORDAN, chatter, overheard=True)
+        assert reply.text == "" and not reply.tools_called
+    assert (len(cal.store.list()), len(cal.store.list_changes())) == (count, log)
+
+
+def test_overheard_launch_news_is_recorded_without_a_mention(cal):
+    reply = cal.say(JORDAN, "heads up, Outlook calendar sync is shipping early December", overheard=True)
+    assert "create_record" in reply.tools_called and reply.text
+    assert cal.find("outlook").dri == "Jordan Lee"
+
+
+def test_overheard_launch_question_is_answered(cal):
+    reply = cal.say(JORDAN, "does anyone know what's at risk right now?", overheard=True)
+    assert reply.text and "query_records" in reply.tools_called
+
+
 def test_never_duplicate_rule_held_for_the_whole_run(cal):
-    assert len(cal.store.list()) == SEED_COUNT + 6
+    assert len(cal.store.list()) == SEED_COUNT + 7
