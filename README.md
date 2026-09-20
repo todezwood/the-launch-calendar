@@ -24,7 +24,7 @@ pytest -v    # 12 Appendix B messages, 5 bare replies, 5 stakeholder questions; 
 | Tracker sync, approvals, permissions | Store is an adapter; the DRI gate covers the risk | A team lives in Linear |
 
 ## Display: one view per goal
-A Notion **board grouped by Status** (roadmap), a **Timeline** (delivery dates), and **Needs eyes** (risks: slipped, at risk, unconfirmed, undated). The board is the default, not a date grid: a grid hides exactly the launches that need eyes — the ones with no date. Notion is both database and display.
+A Notion **board grouped by Status** (roadmap), a **Timeline** (delivery dates), **Risks** (slipped, at risk, unconfirmed, undated) and **Dependencies** (who a slip hits next). The board is the default, not a date grid: a grid hides exactly the launches that need eyes — the ones with no date. Notion is both database and display.
 
 ## Next, and what stayed manual
 **Next:** (1) the Part 2 keep-it-fresh loop — "what changed" digests, stale-record nudges, held changes pushed to the DRI; (2) a graded eval of real intake messages; (3) production shape — private workspace, a queue, a real database with Notion as mirror.
