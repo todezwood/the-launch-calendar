@@ -420,7 +420,7 @@ _TYPES = {"string": str, "boolean": bool, "array": list}
 def _is_blank(value: str) -> bool:
     """Models sometimes fill a field they mean to leave out with a placeholder or stray markup."""
     v = value.strip()
-    return not v or ("<" in v and ">" in v) or v.lower() in ("empty", "n/a", "null")
+    return not v or ("<" in v and ">" in v) or v.lower() in ("empty", "n/a", "null", "none", "unused", "unset")
 
 
 def _checked(name: str, args: dict) -> dict:
