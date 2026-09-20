@@ -3,13 +3,14 @@ import json
 import sys
 from pathlib import Path
 
-from adapters.cli import open_store
+from adapters.cli import load_env, open_store
 from agent.schema import Launch
 
 SEED = Path(__file__).parent.parent / "tests" / "fixtures" / "seed.json"
 
 
 def main(backend: str = "json") -> None:
+    load_env()
     store = open_store(backend)
     if store.list():
         sys.exit("Store is not empty — refusing to seed twice.")
