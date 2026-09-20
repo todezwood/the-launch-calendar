@@ -5,6 +5,8 @@ The calls that shaped this build, and what I'd revisit. Field-by-field rationale
 ## 1. Standardize the agent, not the humans
 The brief's messages are one messy line each, and that is the right input. A form would get cleaner data and fewer announcements. So there is no form, no slash command, no required fields on the way in: the record is created immediately with whatever was said, and the agent asks at most two questions — only the ones another team plans around (GA date, release size).
 
+The first hour of real use in Slack tested this harder than the suite did: for a bare `Dropbox connector` the deployed bot asked "is this a new launch?" and saved nothing — a polite form, by another name. The prompt now says a bare feature name that matches nothing *is* the announcement: create it, then ask.
+
 ## 2. Rules live in code; judgment lives in the model
 The model reads the message and decides *what is being said*. Everything that must never be wrong is enforced by the tool layer, and each rule has an offline test (`tests/test_rules.py`):
 
