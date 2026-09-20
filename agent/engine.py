@@ -41,11 +41,9 @@ class Reply:
         return [a["tool"] for a in self.actions]
 
 
-def handle(message: str, sender: Sender, now: datetime, store: Store, overheard: bool = False) -> Reply:
-    """`overheard`: said in the channel, not to the bot. Launch news is still recorded; anything
-    else gets an empty Reply, which the adapter posts as nothing at all."""
+def handle(message: str, sender: Sender, now: datetime, store: Store) -> Reply:
     dispatcher = Dispatcher(store, sender, now)
-    messages = [{"role": "user", "content": prompts.context(message, sender, now, store.list(), overheard)}]
+    messages = [{"role": "user", "content": prompts.context(message, sender, now, store.list())}]
     text = ""
 
     for _ in range(MAX_TURNS):
@@ -72,10 +70,6 @@ def handle(message: str, sender: Sender, now: datetime, store: Store, overheard:
             for block in response.content if block.type == "tool_use"
         ]})
 
-    if overheard and prompts.NO_REPLY in text:
-        # Staying quiet is only allowed when nothing was written; a silent write is never OK.
-        text = "Noted on the calendar." if dispatcher.actions else ""
-        return Reply(text=text, actions=dispatcher.actions)
     if not text:
         text = "I couldn't work that one out — could you rephrase it?"
     return Reply(text=text, actions=dispatcher.actions)

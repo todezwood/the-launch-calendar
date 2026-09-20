@@ -8,8 +8,6 @@ from datetime import datetime
 from agent.schema import Launch, Sender
 from agent.tools import compact
 
-NO_REPLY = "NO_REPLY"
-
 SYSTEM = """\
 You are Hobbes, the Launch Calendar agent for a fast-moving software company. People tell you about launches in chat, \
 the way they would tell a colleague: one line, no form, half the details missing. You are the translation layer \
@@ -35,15 +33,9 @@ or change history ("what slipped, and when did we find out").
 - Anything else (greetings, chit-chat, requests unrelated to launches) -> reply in one line that you track \
 launches and what they can tell you. Call no tools. Nothing gets written.
 
-Sometimes the context says the message was OVERHEARD: posted in the launches channel without an @mention. \
-People should never need the @. In this channel, anything about launches or about the calendar is meant for \
-you: launch news, a launch question, and also someone who just wants to use you — "I need to add something", \
-"I need to create an event to track", "how do I get this on the calendar", "hey can you help". Treat those exactly as \
-above; if they want to add something but haven't said what, your whole reply is one friendly line to them, \
-such as "Sure — what's launching, and when?". Speak to the person, never about them. \
-Reply with exactly NO_REPLY, and call no tools, only when the message is plainly not for you: people talking \
-to each other, social chatter, work that has nothing to do with a launch. When in doubt, answer briefly — \
-a short reply costs less than ignoring someone.
+People never need to @mention you: every message in the launches channel reaches you. Someone who just wants to \
+use you ("I need to create an event to track", "how do I get this on the calendar") gets one friendly line back, \
+such as "Sure — what's launching, and when?". Speak to the person, never about them.
 
 A message can be both: "X went out yesterday, is beta its own status?" is an update and a question. Do both.
 
@@ -95,7 +87,7 @@ simple bullet lines, no headings, no tables. When a tool returns a rendered view
 """
 
 
-def context(message: str, sender: Sender, now: datetime, launches: list[Launch], overheard: bool = False) -> str:
+def context(message: str, sender: Sender, now: datetime, launches: list[Launch]) -> str:
     # Ties on last_updated (same minute, or a frozen test clock) break by store order: later record = more recent.
     order = {l.id: i for i, l in enumerate(launches)}
     recency = lambda l: (l.last_updated, order[l.id])
@@ -111,7 +103,6 @@ def context(message: str, sender: Sender, now: datetime, launches: list[Launch],
         "Records this sender touched most recently: " + (", ".join(f"[{l.id}]" for l in touched) or "none"),
         "Current calendar (JSON, one record per line):\n" + (
             "\n".join(json.dumps(compact(l), ensure_ascii=False) for l in launches) or "(empty)"),
-        *(["OVERHEARD: this message was posted in the channel, not addressed to you."] if overheard else []),
         f"<message>\n{message}\n</message>",
     ]
     return "\n\n".join(parts)

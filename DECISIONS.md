@@ -7,7 +7,7 @@ The brief's messages are one messy line each, and that is the right input. A for
 
 The first hour of real use in Slack tested this harder than the suite did: for a bare `Dropbox connector` the deployed bot asked "is this a new launch?" and saved nothing — a polite form, by another name. The prompt now says a bare feature name that matches nothing *is* the announcement: create it, then ask.
 
-The same hour killed the @mention. I forgot it myself, twice, and the bot sat silent — a required prefix is one more field on the form. The bot now hears every message in the launches channel. What isn't said to it goes to the model marked *overheard*: launch news is recorded and answered in a thread, anything else gets no reply at all (live tests cover both). Trade: every channel message costs a model call, which is right for one dedicated channel and wrong for #general.
+The same hour killed the @mention. I forgot it myself, twice, and the bot sat silent — a required prefix is one more field on the form. The bot now treats every message in the launches channel as meant for it and answers in a thread. I first had it stay silent on anything that wasn't launch news; in use, silence read as "it's down", so that came out — telling chatter from news is the model's job, and a one-line reply is cheaper than a confused user. Trade: every channel message costs a model call, which is right for one dedicated channel and wrong for #general.
 
 ## 2. Rules live in code; judgment lives in the model
 The model reads the message and decides *what is being said*. Everything that must never be wrong is enforced by the tool layer, and each rule has an offline test (`tests/test_rules.py`):
