@@ -18,7 +18,10 @@ from slack_bolt import App
 from adapters.cli import TZ, open_store
 from agent.schema import Sender
 
-app = App(token=os.environ.get("SLACK_BOT_TOKEN"), signing_secret=os.environ.get("SLACK_SIGNING_SECRET"))
+# No auth.test call at boot: a cold start should spend its 3 seconds acking Slack, and a
+# bad token should fail one reply, not crash-loop the container.
+app = App(token=os.environ.get("SLACK_BOT_TOKEN"), signing_secret=os.environ.get("SLACK_SIGNING_SECRET"),
+          token_verification_enabled=False)
 
 _seen: set[tuple[str, str]] = set()     # authoritative because the service runs --max-instances 1
 _seen_lock = threading.Lock()

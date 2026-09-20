@@ -1,6 +1,6 @@
 """ONE-SHOT: create the two Notion databases under a parent page and print their ids.
 
-  NOTION_TOKEN=... NOTION_PARENT_PAGE_ID=... python -m scripts.provision_notion
+  NOTION_TOKEN=... NOTION_PARENT_PAGE_ID=<page link or id> python -m scripts.provision_notion
 
 Share the parent page with the integration first. Not idempotent on purpose —
 it refuses to run if the ids are already in the environment. The Roadmap board
@@ -8,6 +8,7 @@ view is ~90 seconds by hand afterwards: Board layout, group by Status, sort by
 GA date (documented in the README).
 """
 import os
+import re
 import sys
 
 from adapters.cli import load_env
@@ -25,11 +26,19 @@ def select(values):
     return {"select": {"options": [{"name": v, "color": COLORS.get(v, "default")} for v in values]}}
 
 
+def page_id(value: str) -> str:
+    """Accepts a bare id or a pasted page link (the id is the last 32 hex characters of the path)."""
+    found = re.findall(r"[0-9a-f]{32}", value.split("?")[0].replace("-", "").lower())
+    if not found:
+        sys.exit("NOTION_PARENT_PAGE_ID should be the page link or its 32-character id.")
+    return found[-1]
+
+
 def main() -> None:
     load_env()
     if os.environ.get("NOTION_LAUNCHES_DS_ID"):
         sys.exit("NOTION_LAUNCHES_DS_ID is already set — this script is one-shot.")
-    notion, parent = client(), {"type": "page_id", "page_id": os.environ["NOTION_PARENT_PAGE_ID"]}
+    notion, parent = client(), {"type": "page_id", "page_id": page_id(os.environ["NOTION_PARENT_PAGE_ID"])}
 
     props = {}
     for key, (name, kind) in PROPS.items():
