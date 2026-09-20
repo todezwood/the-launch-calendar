@@ -18,10 +18,11 @@ The model reads the message and decides *what is being said*. Everything that mu
 | A date that moves later marks the record `slipped`; a removed date becomes `tbd` + `at_risk` | In a live run the model called a one-week slip "at risk". Code now wins. |
 | A slip flags every downstream launch | The person announcing the slip rarely knows who depends on them |
 | Same title can't be created twice, even with the model's "not a duplicate" override | In a live run the model re-created a record to correct a detail |
+| A placeholder title ("place holder", "tbd") is refused; a dependency of `"null"` means none | In a live run a garbled second tool call created a junk record |
 | Max 3 changes per message; message text is data, not instructions | One message should not be able to rewrite the calendar |
 | The model cannot write identity, governance, timestamps or history | Those come from the chat envelope, not from what someone typed |
 
-Two of those rows exist because the live tests caught the model doing the wrong thing. That is the argument for the split: a prompt fix would have held until the next model update; the code fix holds.
+Three of those rows exist because the live tests caught the model doing the wrong thing. That is the argument for the split: a prompt fix would have held until the next model update; the code fix holds.
 
 ## 3. Three narrow tools, not one big one
 `create_record`, `update_record`, `query_records`. Things I learned the hard way:

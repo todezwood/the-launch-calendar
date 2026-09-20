@@ -194,6 +194,12 @@ def test_overheard_chatter_gets_no_reply_at_all(cal):
     assert (len(cal.store.list()), len(cal.store.list_changes())) == (count, log)
 
 
+def test_overheard_request_to_use_the_calendar_is_answered_not_ignored(cal):
+    count = len(cal.store.list())
+    reply = cal.say(JORDAN, "Hey I need to create an event to track", overheard=True)
+    assert reply.text and "?" in reply.text and len(cal.store.list()) == count
+
+
 def test_overheard_launch_news_is_recorded_without_a_mention(cal):
     reply = cal.say(JORDAN, "heads up, Outlook calendar sync is shipping early December", overheard=True)
     assert "create_record" in reply.tools_called and reply.text

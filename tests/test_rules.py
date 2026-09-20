@@ -71,6 +71,15 @@ def test_same_title_cannot_be_created_twice_even_with_the_override(store):
     assert result["outcome"] == "duplicate" and len(store.list()) == SEED_COUNT
 
 
+def test_a_placeholder_is_not_a_launch(store):
+    # Seen live: a garbled second tool call created a record titled "place holder".
+    d = Dispatcher(store, PRIYA, NOW)
+    junk = d.call("create_record", {"title": "place holder", "status": "Planned", "confirmed_not_duplicate": True})
+    real = d.call("create_record", {"title": "Audit log export", "status": "Planned", "depends_on": ["null"]})
+    assert not junk["ok"] and real["ok"] and store.get(real["record"]["id"]).depends_on == []
+    assert len(store.list()) == SEED_COUNT + 1
+
+
 def test_one_message_cannot_make_more_than_three_changes(store):
     d = Dispatcher(store, SAM, NOW)
     results = [d.call("create_record", {"title": f"Injected launch {n}", "status": "Planned", "confirmed_not_duplicate": True})

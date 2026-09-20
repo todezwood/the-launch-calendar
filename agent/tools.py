@@ -11,6 +11,7 @@ simply omitted when the message doesn't speak to it.
 from __future__ import annotations
 
 import os
+import re
 from datetime import date, datetime
 
 from agent import governance, roadmap
@@ -195,8 +196,8 @@ class Dispatcher:
     # -- create -----------------------------------------------------------
     def _create(self, a: dict) -> dict:
         title = a["title"].strip()
-        if not title:
-            raise ToolError("A record needs a title.")
+        if not title or re.sub(r"[^a-z]", "", title.lower()) in _NOT_A_TITLE:
+            raise ToolError("A record needs a real title: the name of the launch. Nothing was created.")
         same = [l for l in self.store.list() if l.title.strip().lower() == title.lower()]
         if same:   # the override below is for look-alikes, never for the same title
             return {"ok": False, "outcome": "duplicate",
@@ -410,6 +411,7 @@ class Dispatcher:
 
 
 _NEUTRAL = ("unchanged", "unknown", "any", "none")
+_NOT_A_TITLE = ("placeholder", "untitled", "unknown", "none", "null", "tbd", "na", "test", "newlaunch", "launch")
 
 
 _TYPES = {"string": str, "boolean": bool, "array": list}
@@ -435,8 +437,10 @@ def _checked(name: str, args: dict) -> dict:
                 raise ToolError(f"{key} must be a {spec['type']}.")
             if "enum" in spec and out[key] not in spec["enum"]:
                 raise ToolError(f"{key} must be one of {spec['enum']}.")
-            if spec["type"] == "array" and not all(isinstance(i, str) for i in out[key]):
-                raise ToolError(f"{key} must be a list of record ids.")
+            if spec["type"] == "array":
+                if not all(isinstance(i, str) for i in out[key]):
+                    raise ToolError(f"{key} must be a list of record ids.")
+                out[key] = [i for i in out[key] if not _is_blank(i)]      # ["null"] means "none"
             continue
         if spec["type"] == "boolean":
             out[key] = False
