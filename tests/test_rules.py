@@ -72,3 +72,10 @@ def test_model_tools_cannot_write_identity_or_governance_fields():
                  "question_for", "actor"}
     for tool in TOOLS:
         assert not forbidden & set(tool["input_schema"]["properties"]), tool["name"]
+
+
+def test_tool_input_outside_the_schema_is_rejected_in_code(store):
+    d = Dispatcher(store, PRIYA, NOW)
+    assert not update(d, "saved-views", status="Shipped!!")["ok"]
+    assert not update(d, "saved-views", dri_id="U_JORDAN")["ok"]
+    assert store.get("saved-views").status == "In Development"

@@ -5,8 +5,8 @@ propose titles, dates, statuses — it can never write who said something, who
 the DRI's chat id is, the governance flag, timestamps, or change-log rows.
 Those come from the message envelope and are written here, in code.
 
-Schemas avoid nullable/union types on purpose (strict mode caps them): an empty
-string or "unchanged" means "not provided".
+Only the fields that always apply are required; everything else is optional and
+simply omitted when the message doesn't speak to it.
 """
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from store.base import Store
 MAX_MUTATIONS_PER_MESSAGE = 3  # prompt-injection blast-radius cap
 STRICT = os.environ.get("STRICT_TOOLS", "1") == "1"
 
-_DATE = "ISO date YYYY-MM-DD, already resolved against today's date. Empty string if not provided."
+_DATE = "ISO date YYYY-MM-DD, already resolved against today's date. Omit if not provided."
 
 
 def _s(desc: str) -> dict:
@@ -31,32 +31,32 @@ def _enum(values: list[str], desc: str) -> dict:
     return {"type": "string", "enum": values, "description": desc}
 
 
-def _tool(name: str, description: str, properties: dict) -> dict:
+def _tool(name: str, description: str, properties: dict, required: list[str], strict: bool = True) -> dict:
     tool = {
         "name": name,
         "description": description,
         "input_schema": {
             "type": "object",
             "properties": properties,
-            "required": list(properties),
+            "required": required,
             "additionalProperties": False,
         },
     }
-    if STRICT:
+    if STRICT and strict:
         tool["strict"] = True
     return tool
 
 
 _SHARED = {
     "title": _s("Short canonical launch title, e.g. 'SharePoint connector'."),
-    "dri_name": _s("The DRI's name ONLY if the message names someone other than the sender. Otherwise empty."),
+    "dri_name": _s("The DRI's name ONLY if the message names someone other than the sender. Otherwise omit."),
     "ga_date": _s("General-availability date. " + _DATE),
     "beta_date": _s("Date the beta / early-access / internal rollout starts, when the message gives one. " + _DATE),
-    "date_note": _s("The assumption behind a fuzzy date, e.g. \"'end of the month' -> 2026-08-31\" or 'assuming nothing breaks'. Empty if none."),
-    "feature_brief": _s("One or two lines on what is shipping. Empty if not provided."),
-    "audience": _s("Who gets it and in what order, e.g. 'internal first, then early adopters'. Empty if not provided."),
-    "risk_note": _s("One line on why this is at risk, if the message says so. Empty otherwise."),
-    "open_question": _s("If your reply asks the sender something about this record, the question(s) verbatim. Empty if you are not asking anything."),
+    "date_note": _s("The assumption behind a fuzzy date, e.g. \"'end of the month' -> 2026-08-31\" or 'assuming nothing breaks'. Omit if none."),
+    "feature_brief": _s("One or two lines on what is shipping. Omit if not provided."),
+    "audience": _s("Who gets it and in what order, e.g. 'internal first, then early adopters'. Omit if not provided."),
+    "risk_note": _s("One line on why this is at risk, if the message says so. Omit otherwise."),
+    "open_question": _s("If your reply asks the sender something about this record, the question(s) verbatim. Omit if you are not asking anything."),
 }
 
 TOOLS = [
@@ -70,7 +70,7 @@ TOOLS = [
             "status": _enum(STATUSES, "Current stage, not the future one. A launch that is 'planned to ship next week' is In Development."),
             "ga_date": _SHARED["ga_date"],
             "beta_date": _SHARED["beta_date"],
-            "date_confidence": _enum(DATE_CONFIDENCE, "committed = firm promise; target = estimate or hedged; tbd = no GA date."),
+            "date_confidence": _enum(["tbd", "target", "committed"], "committed = firm promise; target = estimate or hedged; tbd = no GA date."),
             "date_note": _SHARED["date_note"],
             "release_size": _enum(RELEASE_SIZES + ["unknown"], "S/M/L only when stated or obvious (a keyboard shortcut is S). Otherwise unknown."),
             "feature_brief": _SHARED["feature_brief"],
@@ -81,16 +81,17 @@ TOOLS = [
             "open_question": _SHARED["open_question"],
             "confirmed_not_duplicate": {"type": "boolean", "description": "Set true only when retrying after a possible-duplicate warning and you are sure this is a different launch."},
         },
+        required=["title", "status", "date_confidence", "release_size", "risk_level"],
     ),
     _tool(
         "update_record",
-        "Change an existing launch record. Provide only what changed; leave everything else empty / 'unchanged'. "
+        "Change an existing launch record. Provide only what changed; omit everything else. "
         "If the sender is not the record's DRI the change is held for DRI confirmation instead of applied — "
         "the result tells you which happened.",
         {
             "record_id": _s("Id of the record, exactly as shown in the calendar."),
-            "title": _s("New title, only if renaming. Empty otherwise."),
-            "dri_name": _s("New DRI name, only if ownership is changing. Empty otherwise."),
+            "title": _s("New title, only if renaming. Omit otherwise."),
+            "dri_name": _s("New DRI name, only if ownership is changing. Omit otherwise."),
             "status": _enum(STATUSES + ["unchanged"], "New stage, or unchanged."),
             "ga_date": _SHARED["ga_date"],
             "clear_ga_date": {"type": "boolean", "description": "True to REMOVE the GA date (someone is un-committing). Confidence becomes tbd."},
@@ -99,8 +100,8 @@ TOOLS = [
             "date_confidence": _enum(DATE_CONFIDENCE + ["unchanged"], "New confidence in the GA date, or unchanged."),
             "date_note": _SHARED["date_note"],
             "release_size": _enum(RELEASE_SIZES + ["unchanged"], "New size, or unchanged."),
-            "feature_brief": _s("The FULL updated brief (not a diff) if scope changed. Empty otherwise."),
-            "audience": _s("The full updated audience/rollout text. Empty if unchanged."),
+            "feature_brief": _s("The FULL updated brief (not a diff) if scope changed. Omit otherwise."),
+            "audience": _s("The full updated audience/rollout text. Omit if unchanged."),
             "risk_level": _enum(RISK_LEVELS + ["unchanged"], "Only set when the message speaks to risk; slips and removed dates are flagged automatically."),
             "risk_note": _SHARED["risk_note"],
             "add_depends_on": {"type": "array", "items": {"type": "string"}, "description": "Record ids to add as upstream dependencies."},
@@ -110,6 +111,10 @@ TOOLS = [
             "pending_decision": _enum(["none", "confirm", "reject"], "When the DRI responds to a held (unconfirmed) change: confirm applies it, reject discards it."),
             "change_note": _s("One line for the change log: what changed and why, in the sender's terms."),
         },
+        # The API caps the combined complexity of strict schemas and this one tips it over.
+        # Its inputs are validated in code instead (_checked), which holds for every tool anyway.
+        required=["record_id"],
+        strict=False,
     ),
     _tool(
         "query_records",
@@ -117,12 +122,13 @@ TOOLS = [
         "'history' returns the change log (what slipped, and when we found out).",
         {
             "view": _enum(["list", "roadmap", "risk", "history"], "Which view."),
-            "text": _s("Filter: words that must appear in title/brief/audience/DRI. Empty for all."),
+            "text": _s("Filter: words that must appear in title/brief/audience/DRI. Omit for all."),
             "status": _enum(STATUSES + ["any"], "Filter by stage."),
-            "date_from": _s("Only launches with a beta or GA date on/after this ISO date. Empty for no bound."),
-            "date_to": _s("Only launches with a beta or GA date on/before this ISO date. Empty for no bound."),
-            "record_id": _s("For 'history': limit to one record. Empty for all."),
+            "date_from": _s("Only launches with a beta or GA date on/after this ISO date. Omit for no bound."),
+            "date_to": _s("Only launches with a beta or GA date on/before this ISO date. Omit for no bound."),
+            "record_id": _s("For 'history': limit to one record. Omit for all."),
         },
+        required=["view"],
     ),
 ]
 
@@ -168,7 +174,7 @@ class Dispatcher:
                 raise ToolError(f"Unknown tool {name!r}.")
             if name != "query_records" and self.mutations >= MAX_MUTATIONS_PER_MESSAGE:
                 raise ToolError(f"Refused: at most {MAX_MUTATIONS_PER_MESSAGE} changes per message. Tell the sender what was not done.")
-            result = handler(_with_defaults(name, args))
+            result = handler(_checked(name, args))
         except ToolError as err:
             result = {"ok": False, "error": str(err)}
         self.actions.append({"tool": name, "outcome": result.get("outcome", "error" if not result.get("ok", True) else "ok"),
@@ -395,12 +401,31 @@ class Dispatcher:
 _NEUTRAL = ("unchanged", "unknown", "any", "none")
 
 
-def _with_defaults(name: str, args: dict) -> dict:
-    """Strict mode guarantees every key; this keeps the code safe without it."""
+_TYPES = {"string": str, "boolean": bool, "array": list}
+
+
+def _is_blank(value: str) -> bool:
+    """Models sometimes fill a field they mean to leave out with a placeholder or stray markup."""
+    v = value.strip()
+    return not v or ("<" in v and ">" in v) or v.lower() in ("empty", "n/a", "null")
+
+
+def _checked(name: str, args: dict) -> dict:
+    """Validate tool input against its schema and fill omitted keys. Strict mode
+    already guarantees this where it is on; code never relies on it."""
     props = next(t for t in TOOLS if t["name"] == name)["input_schema"]["properties"]
-    out = dict(args)
+    unknown = set(args) - set(props)
+    if unknown:
+        raise ToolError(f"Unknown fields: {sorted(unknown)}")
+    out = {k: v for k, v in args.items() if not (isinstance(v, str) and _is_blank(v))}
     for key, spec in props.items():
         if key in out:
+            if not isinstance(out[key], _TYPES[spec["type"]]):
+                raise ToolError(f"{key} must be a {spec['type']}.")
+            if "enum" in spec and out[key] not in spec["enum"]:
+                raise ToolError(f"{key} must be one of {spec['enum']}.")
+            if spec["type"] == "array" and not all(isinstance(i, str) for i in out[key]):
+                raise ToolError(f"{key} must be a list of record ids.")
             continue
         if spec["type"] == "boolean":
             out[key] = False
