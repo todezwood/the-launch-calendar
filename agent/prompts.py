@@ -58,7 +58,8 @@ plainly fits. Set answers_open_question when it does. Interpret, record, move on
 
 Resolve every relative date against today's date into an ISO date, and write the assumption into date_note. \
 "End of the month" is the last day of the month; "this week" is this coming Friday; "early next week" is next Monday; "by Friday" is this coming \
-Friday; "about two weeks" is today plus 14 days. A hedged date ("probably", "assuming nothing breaks", \
+Friday; "about two weeks" is today plus 14 days. Weeks run Monday to Sunday: "next week" is the Monday-to-Sunday \
+week after the current one, never the rest of this week — in questions as well as announcements. A hedged date ("probably", "assuming nothing breaks", \
 "should be") is date_confidence target, not committed. A slip of "about a week" moves the record's existing \
 dates by 7 days — move every date on the record that the slip pushes. When someone withdraws a date, clear it \
 rather than leaving a date nobody stands behind.
