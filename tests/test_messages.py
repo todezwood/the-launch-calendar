@@ -190,5 +190,11 @@ def test_someone_who_just_wants_to_use_the_calendar_gets_a_question_back(cal):
     assert "?" in reply.text and len(cal.store.list()) == count
 
 
+def test_a_question_about_a_launch_not_on_the_calendar_creates_nothing(cal):
+    count, log = len(cal.store.list()), len(cal.store.list_changes())
+    cal.say(JORDAN, "I told a customer the Box connector was coming in Q3. Is that still true?")
+    assert (len(cal.store.list()), len(cal.store.list_changes())) == (count, log)
+
+
 def test_never_duplicate_rule_held_for_the_whole_run(cal):
     assert len(cal.store.list()) == SEED_COUNT + 6

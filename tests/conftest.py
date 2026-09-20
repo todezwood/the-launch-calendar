@@ -6,8 +6,12 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from adapters.cli import load_env
 from agent.schema import Sender
 from store.json_store import JsonStore
+
+# The README says "put the key in .env" — pytest has to read it too, or the live tests skip.
+load_env(str(Path(__file__).parent.parent / ".env"))
 
 SEED = Path(__file__).parent / "fixtures" / "seed.json"
 # Frozen clock: the Appendix B messages talk about "Sept 1" and "Sep 7" as upcoming.
