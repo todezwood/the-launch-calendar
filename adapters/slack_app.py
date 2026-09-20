@@ -27,6 +27,8 @@ _seen: set[tuple[str, str]] = set()     # authoritative because the service runs
 _seen_lock = threading.Lock()
 _work_lock = threading.Lock()           # one message at a time: last-write-wins stays readable
 _names: dict[str, str] = {}
+_my_threads: set[tuple[str, str]] = set()   # channel threads the bot has replied in
+_bot_user: list[str] = []
 _store = None
 
 
@@ -49,6 +51,24 @@ def _sender(client, user_id: str) -> Sender:
         except Exception:
             _names[user_id] = user_id
     return Sender(id=user_id, name=_names[user_id])
+
+
+def _in_my_thread(event: dict, client) -> bool:
+    """A reply in a channel thread the bot is already part of needs no @mention: the person
+    is answering its question. Memory first; after a cold start, ask Slack."""
+    key = (event.get("channel", ""), event.get("thread_ts", ""))
+    if not key[1]:
+        return False
+    if key not in _my_threads:
+        try:
+            if not _bot_user:
+                _bot_user.append(client.auth_test()["user_id"])
+            replies = client.conversations_replies(channel=key[0], ts=key[1], limit=50)["messages"]
+            if any(m.get("user") == _bot_user[0] for m in replies):
+                _my_threads.add(key)
+        except Exception:
+            return False
+    return key in _my_threads
 
 
 def _react(client, event: dict, add: str, remove: str | None = None) -> None:
@@ -77,6 +97,8 @@ def _handle(event: dict, client, say) -> None:
             reply = engine.handle(text, _sender(client, event["user"]), datetime.now(TZ), _store)
             tools = reply.tools_called
         say(text=reply.text, thread_ts=thread)
+        if thread:
+            _my_threads.add((event["channel"], thread))
         _react(client, event, "white_check_mark", remove="eyes")
     except Exception as err:
         outcome, error = "error", f"{type(err).__name__}: {err}"
@@ -96,5 +118,7 @@ def on_mention(event, client, say):
 
 @app.event("message")
 def on_message(event, client, say):
-    if event.get("channel_type") == "im":
+    if event.get("bot_id") or event.get("subtype"):
+        return
+    if event.get("channel_type") == "im" or _in_my_thread(event, client):
         _handle(event, client, say)

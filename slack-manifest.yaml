@@ -16,6 +16,7 @@ oauth_config:
       - app_mentions:read
       - chat:write
       - im:history
+      - channels:history
       - users:read
       - reactions:write
 settings:
@@ -25,6 +26,7 @@ settings:
   #   bot_events:
   #     - app_mention
   #     - message.im
+  #     - message.channels   # only thread replies to the bot are acted on
   org_deploy_enabled: false
   socket_mode_enabled: false
   token_rotation_enabled: false

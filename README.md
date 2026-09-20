@@ -2,8 +2,8 @@
 
 **Standardize the agents, not the humans.** People keep announcing launches the way they already do — one messy line in Slack. The agent is the translation layer that turns those lines into one calendar Marketing, Sales, Support, Legal and Leadership can trust without pinging the DRI. v1 goal: visibility into the **roadmap, delivery dates, and risks**.
 
-**Live:** DM `@Hobbes` in the demo Slack workspace (invite: _TODO_) · calendar: _TODO public Notion link_ · up through _TODO date_.
-Try it in 60 seconds — DM these and watch the Notion board: `Dropbox connector` → then `next tues` → then `someone said saved views is on hold, not my project`.
+**Live:** `@Hobbes` in the launches channel (or DM him) in the demo Slack workspace (invite: _TODO_) · calendar: [public Notion board](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168) · up through _TODO date_.
+Try it in 60 seconds — send these and watch the Notion board: `@Hobbes Dropbox connector` → then, in the thread, just `next tues` → then `someone said saved views is on hold, not my project`.
 
 ```
 pip install -r requirements.txt && cp .env.example .env     # add ANTHROPIC_API_KEY
@@ -11,7 +11,7 @@ python -m scripts.seed && python -m adapters.cli --as "Alex Kim"   # chat locall
 python -m adapters.cli roadmap                               # or: risks | history
 pytest -v                                                    # one line per judgment call
 ```
-`pytest -v` runs 15 offline tests (the rules enforced in code, the Notion mapping) plus the 12 Appendix B messages (and their follow-ups) against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own (`tests/fixtures/seed.json`). The calls behind the build, including what the live tests caught, are in `DECISIONS.md`.
+`pytest -v` runs 19 offline tests (the rules enforced in code, the Notion mapping, which Slack messages the bot acts on) plus the 12 Appendix B messages (and their follow-ups) against the live model (needs a key; a green run is committed in `tests/TRANSCRIPT.txt`). Appendix B's "calendar as it stands today" was missing from the PDF, so I seeded my own (`tests/fixtures/seed.json`). The calls behind the build, including what the live tests caught, are in `DECISIONS.md`.
 
 ## Fields, and why (rationale per field lives in `agent/schema.py`)
 - **Title, DRI, GA date, Status, Release size, Feature brief** — the required set. DRI defaults to whoever announced it. **Status speaks GTM language** (Planned → In Development → Internal → Limited Beta → Open Beta → GA): "can Sales talk about it?" is readable from one word, and beta is its own status. Size = how much go-to-market it needs (S quiet, M support heads-up, L blog + enablement).
