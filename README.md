@@ -1,31 +1,46 @@
-# Hobbes — the Launch Calendar agent
+# Hobbes, the Launch Calendar agent
 
-**Standardize the agents, not the humans.** People announce launches as they already do — one messy line in Slack — and the agent turns that into a calendar every team can trust without pinging the DRI. v1 goal: visibility into the **roadmap, delivery dates, and risks**.
+## The problem
+Launch news lives buried in Slack. Sales, Support and Marketing cannot tell what is shipping, when, or what just slipped, so they ping the DRI and still get surprised. The usual fix is a form or a tracker that slows the business down, and it goes stale. My view: **standardize the agents, not the humans.** Let people keep posting the way they do, and have an agent turn those messages into a clean record.
 
-**Live:** talk in the launches channel of the demo Slack (no @mention; tell me whom to add) and watch the [public Notion calendar](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168) ([screenshot](docs/roadmap.png)). Try `Dropbox connector` → in the thread, `next tues` → `someone said saved views is on hold, not my project`. Every write ends with a code-made receipt (saved / held / not done), correctable in-thread. Seeded launches have fictional DRIs, so your change to one is *held as unconfirmed* — the governance rule.
+## The goal
+One calendar every team can trust, giving visibility into the **roadmap, delivery dates, risks, and dependencies**.
 
+## What I built
+- **Lives in Slack.** Post in the launches channel or DM Hobbes. No form, no @mention, no special format.
+- **Creates and updates launches in Notion.** It reads the message, finds the right launch, and saves what changed. "Next tues" becomes a real date.
+- **Answers questions**, such as "what lands next week?" or "what is at risk?"
+- **Sends a receipt after every save.** Code builds it, not the model, so it shows what was saved, held, or not done. Reply in the thread to correct it.
+- **Protects ownership.** A change from anyone but the DRI is held until the DRI confirms. Hearsay never changes the calendar.
+- **Flags risk.** A date that moves later is marked as slipped, and every launch that depends on it is flagged.
+- **Refuses duplicates**, and catches the same message sent twice.
+- **Keeps a change log**: who changed what, when, old value to new value.
+- **One Notion view per goal**: a board by Status (roadmap), a Timeline (dates), Risks and Dependencies.
+- **Hobbes performance**: Performance metrics page tracks speed, errors and 👍/👎.
+
+## What I would do next, and why
+1. **Notifications.** Send held changes to the DRI, and tell teams when a launch they care about moves. Today Hobbes only speaks when spoken to.
+2. **Serve the whole business.** Give each team a checkbox on every launch: Legal sign-off, Marketing's announcement, Sales training, Support's answers. A list of dates becomes a launch readiness view.
+3. **Connect to the release pipeline and other agents.** Hobbes learns from CI/CD when something ships or slips, and checks with a docs agent that customer docs are ready. The calendar stays current without a person typing every update.
+4. **Calendar hygiene.** Background jobs that find stale or never-closed launches, check accuracy, nudge owners, and send a weekly "what changed" digest.
+5. **Real observability.** Move metrics into Datadog or Grafana: uptime, run time, errors, logs, 👍/👎, and how often someone replies "that is not right". That shows where to make the agent better.
+6. **Production ready for GC AI.** Deploy inside GC AI's infrastructure: its cloud, Slack and secrets, a private workspace, a queue, a real database, alerts, and its own CI/CD pipeline.
+
+## What I left manual (most visible first)
+1. **Progress updates.** Every create, update and "it shipped" starts with a person posting. No link to other systems yet (next step 3).
+2. **Confirming held changes.** The DRI has to come to Hobbes. Notifications were out of scope (next step 1).
+3. **Checking Hobbes' work.** A person reads the receipt and corrects it. A human is the last accuracy check, on purpose.
+4. **Cleaning up.** Nothing finds a launch that went quiet or never closed (next step 4).
+5. **Watching Hobbes.** Nothing alerts on errors or 👎. Someone has to open the performance page (next step 5).
+
+## Try it
+**Live:** post in the demo Slack and watch the [public calendar](https://aspiring-tendency-ab9.notion.site/Launch-Calendar-3e173b0fc753801ca77bd9b5c2e86168) update ([screenshot](docs/roadmap.png)).
+
+**On your laptop** (no Slack or Notion needed, only an Anthropic API key):
 ```
-pip install -r requirements.txt && cp .env.example .env    # add ANTHROPIC_API_KEY
-python -m scripts.seed && python -m adapters.cli --as "Alex Kim"   # or: roadmap | risks
-pytest -v    # Appendix B's 12 messages, bare replies, stakeholder questions, reply lint; green run: tests/TRANSCRIPT.txt
+python3 -m venv .venv && source .venv/bin/activate         # 1. a clean Python environment
+pip install -r requirements.txt && cp .env.example .env    # 2. install, then put your key in .env
+python -m scripts.seed                                     # 3. load the 7 sample launches
+python -m adapters.cli --as "Alex Kim"                     # 4. chat with Hobbes in the terminal
+pytest -v                                                  # optional: run the tests (saved run: tests/TRANSCRIPT.txt)
 ```
-
-## Fields, and why (per field: `agent/schema.py`; the calls: `DECISIONS.md`)
-- **Title, DRI, GA date, Status, Release size, Feature brief** — required. **Status speaks GTM language** (Planned → … → Limited Beta → Open Beta → GA): "can Sales talk about it?" is one word. Size = GTM effort (S quiet, M support note, L blog).
-- **Beta date, Audience** — half the brief's messages are betas. **Date confidence** — "about two weeks, assuming nothing breaks" is a target, not a promise; a withdrawn date becomes a blank.
-- **Risk level, Depends on** — set *by code* on slips and removed dates; slips flag dependents.
-- **Needs DRI confirmation** — hearsay is held, not applied. **Change log** (who, when, old → new) — "what slipped, and when did we find out?"
-
-## What I left out
-| Left out | Why not v1 | Revisit when |
-|---|---|---|
-| Reminders, nudges, notifications | Part 2; trust in the record comes first | DRIs rely on it |
-| Legal/data-touch flag, goal linkage | Needs Legal's definitions, not my guess | Legal asks the bot |
-| Tracker sync, approvals, permissions | Store is an adapter; the DRI gate covers the risk | A team lives in Linear |
-
-## Display: one view per goal
-A Notion **board grouped by Status** (roadmap), a **Timeline** (delivery dates), **Risks** and **Dependencies** (who a slip hits next). The board is the default: a date grid hides the launches that need eyes — those with no date. A **Hobbes performance** log records every handled message — speed, errors, duplicates, 👍/👎 — never its text.
-
-## Next, and what stayed manual
-**Next:** (1) the Part 2 keep-it-fresh loop — "what changed" digests, stale-record nudges, held changes pushed to the DRI; (2) a graded eval of real intake messages; (3) production shape — private workspace, a queue, a real database behind Notion.
-**Manual today:** confirming held changes, DRI reassignment, Notion view setup, Slack install.
