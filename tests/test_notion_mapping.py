@@ -45,6 +45,7 @@ class FakeNotion:
 def store(monkeypatch):
     monkeypatch.setenv("NOTION_LAUNCHES_DS_ID", "launches")
     monkeypatch.setenv("NOTION_CHANGES_DS_ID", "changes")
+    monkeypatch.delenv("NOTION_AGENT_LOG_DS_ID", raising=False)    # a developer's real .env must not leak in
     monkeypatch.setattr(notion_store, "client", FakeNotion)
     return NotionStore()
 

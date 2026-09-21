@@ -130,6 +130,13 @@ def test_every_handled_message_is_logged_without_its_text(slack):
     assert "slipping" not in str(row)
 
 
+def test_a_reply_that_saved_something_asks_for_a_thumbs_reaction_and_others_do_not(slack):
+    client = FakeSlack()
+    slack({"channel": "C1", "ts": "1", "user": "U1", "text": "slip it a week"}, client)
+    slack({"channel": "C1", "ts": "2", "user": "U1", "text": "what lands next week?"}, client)
+    assert client.said[0]["text"].endswith(slack_app.RATE_HINT) and "React" not in client.said[1]["text"]
+
+
 def test_thumbs_reaction_sets_rating_and_other_emoji_are_ignored(slack):
     slack({"channel": "C1", "ts": "1", "user": "U1", "text": "slip it a week"}, FakeSlack())
     react = lambda name, ts="reply-1", **kw: slack_app.on_reaction(

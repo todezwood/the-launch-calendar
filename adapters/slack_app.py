@@ -61,6 +61,8 @@ def _react(client, event: dict, add: str, remove: str | None = None) -> None:
 
 
 RESEND_WINDOW = 120    # seconds
+# Nobody guesses that a reaction is feedback, so every reply that saved something says so.
+RATE_HINT = "_Did I get this right? React 👍 or 👎 on this message._"
 _recent: dict[tuple, tuple[float, str]] = {}    # (user, channel, thread, text) -> (when, receipt) for messages that WROTE
 
 
@@ -126,7 +128,8 @@ def _handle(event: dict, client, say, bot_id: str | None = None) -> None:
                 who = _sender(client, event["user"])
                 reply = engine.handle(text, who, datetime.now(TZ), _store,
                                       thread=f"{event.get('channel', '')}:{thread}" if thread else "")
-                tools, posted, sender = reply.tools_called, reply.text, who.name
+                tools, sender = reply.tools_called, who.name
+                posted = reply.text + (f"\n{RATE_HINT}" if reply.receipt else "")
                 outcomes = [a["outcome"] for a in reply.actions]
                 stats = {"kind": reply.kind, "writes": sum(o in ("created", "updated") for o in outcomes),
                          "held": outcomes.count("held_for_dri"),
