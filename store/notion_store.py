@@ -34,10 +34,12 @@ PROPS = {
     "open_question": ("Open question", "rich_text"),
     "question_for": ("Question for", "rich_text"),
     "dri_id": ("DRI chat id", "rich_text"),
+    "thread": ("Slack thread", "rich_text"),
     "last_updated": ("Last updated", "date"),
     "last_updated_by": ("Last updated by", "rich_text"),
 }
 DEPENDS_TEXT = "Blocked by"   # fallback when the self-relation could not be provisioned
+OPTIONAL = {"thread"}         # columns added after v1: a database without them degrades, it does not 400
 
 
 def client():
@@ -58,14 +60,16 @@ class NotionStore(Store):
         self.notion = client()
         self.launches_ds = os.environ["NOTION_LAUNCHES_DS_ID"]
         self.changes_ds = os.environ["NOTION_CHANGES_DS_ID"]
+        self.log_ds = os.environ.get("NOTION_AGENT_LOG_DS_ID", "")     # optional: unset means no agent log
         schema = self.notion.data_sources.retrieve(data_source_id=self.launches_ds)["properties"]
         self.relation_mode = schema.get(PROPS["depends_on"][0], {}).get("type") == "relation"
+        self.columns = set(schema)
 
     # -- mapping ----------------------------------------------------------
     def _to_props(self, launch: Launch, only: set[str] | None = None) -> dict:
         out = {}
         for key, (name, kind) in PROPS.items():
-            if key == "id" or (only is not None and key not in only):
+            if key == "id" or (only is not None and key not in only) or (key in OPTIONAL and name not in self.columns):
                 continue
             value = getattr(launch, key)
             if kind == "title":
@@ -129,11 +133,15 @@ class NotionStore(Store):
         return launch
 
     def get(self, launch_id: str) -> Launch | None:
-        from notion_client import APIResponseError
+        from notion_client import APIErrorCode, APIResponseError
         try:
             page = self.notion.pages.retrieve(page_id=launch_id)
-        except APIResponseError:
-            return None
+        except APIResponseError as err:
+            # Only "no such page" (or an id that is not a page id at all) means "no record".
+            # An outage or a bad token must surface as an error, not as "that record doesn't exist".
+            if err.code in (APIErrorCode.ObjectNotFound, APIErrorCode.ValidationError):
+                return None
+            raise
         if page.get("in_trash") or page.get("archived"):
             return None
         return self._from_page(page, None if self.relation_mode else self._titles())
@@ -181,3 +189,32 @@ class NotionStore(Store):
                 note=_plain(p["Note"]),
             ))
         return rows
+
+    # -- agent log (the performance page) ---------------------------------
+    # Counts and timings only. No message text and no exception text: this page is published to the web.
+    def log_event(self, event: dict) -> None:
+        if not self.log_ds:
+            return
+        props = {
+            "Event": {"title": _rt(f"{event.get('kind', 'other')} · {event.get('sender', '')}")},
+            "When": {"date": {"start": event["when"]}},
+            "Sender": {"rich_text": _rt(event.get("sender", ""))},
+            "Kind": {"select": {"name": event.get("kind", "other")}},
+            "Writes": {"number": event.get("writes", 0)},
+            "Held": {"number": event.get("held", 0)},
+            "Duplicates refused": {"number": event.get("dup_refused", 0)},
+            "Resend caught": {"checkbox": bool(event.get("resend"))},
+            "Error": {"checkbox": bool(event.get("error"))},
+            "Ref": {"rich_text": _rt(event.get("ref", ""))},
+            "Seconds": {"number": event.get("seconds", 0)},
+            "Reply ts": {"rich_text": _rt(event.get("reply_ts", ""))},
+        }
+        self.notion.pages.create(parent={"type": "data_source_id", "data_source_id": self.log_ds}, properties=props)
+
+    def set_rating(self, reply_ts: str, rating: str) -> bool:
+        if not self.log_ds or not reply_ts:
+            return False
+        rows = self._query(self.log_ds, filter={"property": "Reply ts", "rich_text": {"equals": reply_ts}})
+        for page in rows[:1]:
+            self.notion.pages.update(page_id=page["id"], properties={"Rating": {"select": {"name": rating}}})
+        return bool(rows)

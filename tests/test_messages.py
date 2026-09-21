@@ -1,7 +1,9 @@
 """The Appendix B messages, in order, against the live model and a seeded JSON
 store, with a frozen clock (Mon 2026-08-24). Each test name is one judgment call.
 
-Asserts are structural (what ended up on the calendar), never reply prose.
+Asserts are structural (what ended up on the calendar). On top of that every reply goes through a small
+deterministic lint (tests/lint.py): no offer of an action the agent can't perform, and a code-made receipt
+on every write. JUDGE=1 adds an offline scorecard at the end of the run (tests/judge.py) — a report, not a gate.
 Needs ANTHROPIC_API_KEY; a committed transcript of a green run lives in
 tests/TRANSCRIPT.txt for reviewers without a key.
 """
@@ -10,7 +12,10 @@ import os
 import pytest
 
 from agent import engine
+from agent.tools import compact
+from tests import conftest
 from tests.conftest import ALEX, JORDAN, MARCUS, NOW, PRIYA, SEED_COUNT, seeded_store
+from tests.lint import WRONG_NEXT_WEEK, lint
 
 pytestmark = pytest.mark.skipif(not os.environ.get("ANTHROPIC_API_KEY"), reason="live test: set ANTHROPIC_API_KEY")
 
@@ -21,9 +26,17 @@ def cal(tmp_path_factory):
     store = seeded_store(tmp_path_factory.mktemp("cal"))
 
     class Calendar:
-        def say(self, sender, message):
-            reply = engine.handle(message, sender, NOW, store)
-            print(f"\n[{sender.name}] {message}\n[agent] {reply.text}\n[tools] {reply.actions}")
+        def say(self, sender, message, store=store, thread=""):
+            reply = engine.handle(message, sender, NOW, store, thread=thread)
+            print(f"\n[{sender.name}] {message}\n[agent] {reply.text}\n[tools] {[(a['tool'], a['outcome']) for a in reply.actions]}")
+            errors, warnings = lint(message, reply, store.list(), NOW)
+            test = os.environ.get("PYTEST_CURRENT_TEST", "").split("::")[-1].split(" ")[0]
+            conftest.WARNINGS += [f"[{test}] {w}" for w in warnings]
+            conftest.RUN.append({"test": test, "today": f"{NOW:%A %Y-%m-%d}", "sender": sender.name, "message": message,
+                                 "reply": reply.text, "actions": reply.actions, "changes": reply.changes,
+                                 "calendar": [compact(l) for l in store.list()],
+                                 "log": [f"{c.launch_title}: {c.field} {c.old!r} -> {c.new!r} ({c.actor})" for c in store.list_changes()][-40:]})
+            assert not errors, errors
             return reply
 
         def find(self, *words):
@@ -133,7 +146,7 @@ def test_08_slip_updates_existing_record_and_does_not_duplicate(cal):
 def test_09_beta_is_its_own_status_and_the_question_gets_answered(cal):
     reply = cal.say(ALEX, "salesforce beta went out yesterday to the flagged accounts. do I move it to GA or is beta its own status")
     assert cal.find("salesforce").status == "Limited Beta"
-    assert "beta" in reply.text.lower()
+    assert "beta" in reply.prose.lower()      # the model's own words: the receipt would make this trivially true
 
 
 def test_10_scope_change_updates_the_brief_and_leaves_the_date_alone(cal):
@@ -170,7 +183,7 @@ def test_ambiguous_update_asks_which_record_instead_of_guessing(cal):
     log = len(cal.store.list_changes())
     reply = cal.say(ALEX, "the connector is slipping two weeks")
     assert not {"create_record", "update_record"} & set(reply.tools_called)
-    assert len(cal.store.list_changes()) == log and "?" in reply.text
+    assert len(cal.store.list_changes()) == log and "?" in reply.prose
 
 
 def test_injected_instructions_inside_a_message_are_treated_as_data(cal):
@@ -188,7 +201,7 @@ def test_leadership_question_is_answered_from_the_change_log(cal):
 def test_someone_who_just_wants_to_use_the_calendar_gets_a_question_back(cal):
     count = len(cal.store.list())
     reply = cal.say(JORDAN, "Hey I need to create an event to track")
-    assert "?" in reply.text and len(cal.store.list()) == count
+    assert "?" in reply.prose and len(cal.store.list()) == count
 
 
 def test_a_question_about_a_launch_not_on_the_calendar_creates_nothing(cal):
@@ -211,7 +224,8 @@ def test_marketing_question_finds_the_large_launch_in_the_next_three_weeks(cal):
 
 
 def test_support_question_finds_what_lands_next_week(cal):
-    assert "trial" in _ask(cal, "What lands next week that's going to generate tickets?")
+    text = _ask(cal, "What lands next week that's going to generate tickets?")
+    assert "trial" in text and not WRONG_NEXT_WEEK.search(text)    # next week is Aug 31 – Sep 6, not the rest of this one
 
 
 def test_sales_question_about_a_launch_on_the_calendar_gets_its_date_and_confidence(cal):
@@ -223,5 +237,27 @@ def test_legal_question_writes_nothing_because_data_touch_is_not_tracked_yet(cal
     _ask(cal, "Does anything going out this month touch customer data or a new jurisdiction?")
 
 
+# --- From the code audit: a batch of updates, and two threads at once ---
+
+def test_four_updates_in_one_message_all_land(cal):
+    reply = cal.say(ALEX, "Four updates: Dropbox connector is actually size L; the / shortcut for skills is in Open Beta now; "
+                          "self-serve trials is a size M release; and multi-tab support is also going to "
+                          "enterprise admins.")
+    assert cal.find("dropbox").release_size == "L" and cal.find("shortcut").status == "Open Beta"
+    assert cal.find("trial").release_size == "M" and "enterprise" in cal.find("multi").audience.lower()
+    for word in ("dropbox", "shortcut", "trial", "multi"):
+        assert f"*{cal.find(word).title}*" in reply.receipt     # the receipt is the check: every record, by name
+
+
+def test_bare_reply_in_the_older_thread_lands_on_that_record(cal, tmp_path):
+    store = seeded_store(tmp_path)
+    cal.say(ALEX, "Dropbox connector", store=store, thread="C1:100.1")
+    cal.say(ALEX, "Audit log export", store=store, thread="C1:200.2")     # a newer open question for the same person
+    cal.say(ALEX, "M", store=store, thread="C1:100.1")                    # ...but the answer is in the older thread
+    sizes = {l.title.lower().split()[0]: l.release_size for l in store.list()}
+    assert sizes["dropbox"] == "M" and sizes["audit"] != "M"
+
+
 def test_never_duplicate_rule_held_for_the_whole_run(cal):
+    conftest.TITLES[:] = [l.title for l in cal.store.list()]
     assert len(cal.store.list()) == SEED_COUNT + 6

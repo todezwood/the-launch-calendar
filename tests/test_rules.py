@@ -1,5 +1,5 @@
 """The rules that are enforced in CODE, not in the prompt. No API key needed."""
-from agent.tools import MAX_MUTATIONS_PER_MESSAGE, TOOLS, Dispatcher
+from agent.tools import TOOLS, Dispatcher
 from tests.conftest import JORDAN, NOW, PRIYA, SAM, SEED_COUNT
 
 
@@ -75,18 +75,20 @@ def test_a_placeholder_is_not_a_launch(store):
     # Seen live: a garbled second tool call created a record titled "place holder".
     d = Dispatcher(store, PRIYA, NOW)
     junk = [d.call("create_record", {"title": title, "status": "Planned", "confirmed_not_duplicate": True})
-            for title in ("place holder", "place")]   # "place" got through in the final audit and ate the change budget
+            for title in ("place holder", "place")]   # "place" got through in the final audit
     real = d.call("create_record", {"title": "Audit log export", "status": "Planned", "depends_on": ["null"]})
     assert not any(j["ok"] for j in junk) and real["ok"] and store.get(real["record"]["id"]).depends_on == []
     assert len(store.list()) == SEED_COUNT + 1
 
 
-def test_one_message_cannot_make_more_than_three_changes(store):
+def test_one_message_can_make_more_than_three_changes_and_every_row_is_kept(store):
+    # The old 3-change cap blocked real batch updates. What bounds a message now is the turn limit;
+    # what keeps it honest is that every row lands in the change log and on the receipt.
     d = Dispatcher(store, SAM, NOW)
-    results = [d.call("create_record", {"title": f"Injected launch {n}", "status": "Planned", "confirmed_not_duplicate": True})
-               for n in range(MAX_MUTATIONS_PER_MESSAGE + 2)]
-    assert sum(r["ok"] for r in results) == MAX_MUTATIONS_PER_MESSAGE
-    assert len(store.list()) == SEED_COUNT + MAX_MUTATIONS_PER_MESSAGE
+    results = [d.call("create_record", {"title": f"Batch launch {n}", "status": "Planned", "confirmed_not_duplicate": True})
+               for n in range(5)]
+    assert all(r["ok"] for r in results) and len(store.list()) == SEED_COUNT + 5
+    assert [c.field for c in d.changes] == ["created"] * 5
 
 
 def test_model_tools_cannot_write_identity_or_governance_fields():

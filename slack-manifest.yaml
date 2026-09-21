@@ -19,6 +19,7 @@ oauth_config:
       - channels:history
       - users:read
       - reactions:write
+      - reactions:read     # 👍 / 👎 on a reply is recorded as its rating
 settings:
   # Add after the service is deployed (Bolt answers the URL verification challenge):
   # event_subscriptions:
@@ -26,6 +27,7 @@ settings:
   #   bot_events:
   #     - app_mention
   #     - message.im
+  #     - reaction_added
   #     - message.channels   # every message in the launches channel is answered, no @mention needed
   org_deploy_enabled: false
   socket_mode_enabled: false

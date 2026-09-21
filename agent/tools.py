@@ -18,7 +18,6 @@ from agent import governance, roadmap
 from agent.schema import DATE_CONFIDENCE, RELEASE_SIZES, RISK_LEVELS, STATUSES, Change, Launch, Sender
 from store.base import Store
 
-MAX_MUTATIONS_PER_MESSAGE = 3  # prompt-injection blast-radius cap
 STRICT = os.environ.get("STRICT_TOOLS", "1") == "1"
 
 _DATE = "ISO date YYYY-MM-DD, already resolved against today's date. Omit if not provided."
@@ -142,6 +141,7 @@ def compact(launch: Launch) -> dict:
     data = {k: v for k, v in launch.to_dict().items() if v not in ("", None, [], False)}
     data.pop("dri_id", None)
     data.pop("question_for", None)
+    data.pop("thread", None)
     held = governance.pending(launch)
     if held:
         data["pending_change"] = held
@@ -165,10 +165,11 @@ class ToolError(Exception):
 class Dispatcher:
     """Executes tool calls for ONE inbound message from ONE sender."""
 
-    def __init__(self, store: Store, sender: Sender, now: datetime):
-        self.store, self.sender, self.now = store, sender, now
+    def __init__(self, store: Store, sender: Sender, now: datetime, thread: str = ""):
+        self.store, self.sender, self.now, self.thread = store, sender, now, thread
         self.mutations = 0
         self.actions: list[dict] = []   # what actually happened — for logs and tests
+        self.changes: list[Change] = []  # every change-log row this message wrote — the receipt is built from these
 
     # -- plumbing ---------------------------------------------------------
     def call(self, name: str, args: dict) -> dict:
@@ -176,25 +177,34 @@ class Dispatcher:
         try:
             if handler is None:
                 raise ToolError(f"Unknown tool {name!r}.")
-            if name != "query_records" and self.mutations >= MAX_MUTATIONS_PER_MESSAGE:
-                raise ToolError(f"Refused: at most {MAX_MUTATIONS_PER_MESSAGE} changes per message. Tell the sender what was not done.")
             result = handler(_checked(name, args))
         except ToolError as err:
             result = {"ok": False, "error": str(err)}
         self.actions.append({"tool": name, "outcome": result.get("outcome", "error" if not result.get("ok", True) else "ok"),
-                             "record_id": result.get("record", {}).get("id", args.get("record_id", ""))})
+                             "record_id": result.get("record", {}).get("id", args.get("record_id", "")),
+                             "title": result.get("record", {}).get("title") or args.get("title", ""),
+                             "error": result.get("error", "")})
         return result
 
     def _log(self, launch: Launch, field: str, old, new, note: str = "", actor: str | None = None) -> None:
-        self.store.add_change(Change(
+        change = Change(
             timestamp=self.now.isoformat(timespec="seconds"), actor=actor or self.sender.name,
             launch_id=launch.id, launch_title=launch.title, field=field,
             old=_text(old), new=_text(new), note=note,
-        ))
+        )
+        self.changes.append(change)
+        self.store.add_change(change)
 
     def _stamp(self, launch: Launch) -> None:
         launch.last_updated = self.now.isoformat(timespec="seconds")
         launch.last_updated_by = self.sender.name
+
+    def _stamp_thread(self, launch: Launch) -> set[str]:
+        """The chat thread a record was last written from, so a bare reply there finds it."""
+        if self.thread and launch.thread != self.thread:
+            launch.thread = self.thread
+            return {"thread"}
+        return set()
 
     # -- create -----------------------------------------------------------
     def _create(self, a: dict) -> dict:
@@ -229,6 +239,7 @@ class Dispatcher:
         )
         self._set_question(launch, a["open_question"])
         self._stamp(launch)
+        self._stamp_thread(launch)
         launch = self.store.save(launch)
         self.mutations += 1
         self._log(launch, "created", "", f"{launch.status}; GA {ga or 'none'}; beta {beta or 'none'}; size {launch.release_size or '?'}")
@@ -275,7 +286,7 @@ class Dispatcher:
             if not proposed:
                 raise ToolError("Nothing to change.")
             governance.hold(launch, self.sender, proposed, note, self.now.isoformat(timespec="seconds"))
-            self.store.update(launch, {"needs_dri_confirmation", "pending_change"})
+            self.store.update(launch, {"needs_dri_confirmation", "pending_change"} | self._stamp_thread(launch))
             self.mutations += 1
             self._log(launch, "pending", "", _text(proposed), note=f"Held for {launch.dri} to confirm. {note}".strip())
             return {"ok": True, "outcome": "held_for_dri",
@@ -339,7 +350,7 @@ class Dispatcher:
             return {"ok": True, "outcome": "no_change", "message": "Record already says that.", "record": compact(launch)}
 
         self._stamp(launch)
-        self.store.update(launch, changed | {"last_updated", "last_updated_by"})
+        self.store.update(launch, changed | {"last_updated", "last_updated_by"} | self._stamp_thread(launch))
         self.mutations += 1
         downstream = self._flag_downstream(launch, date_events, proposed)
         return {"ok": True, "outcome": "updated", "changed": sorted(changed), "record": compact(launch),

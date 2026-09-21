@@ -56,3 +56,12 @@ class JsonStore(Store):
 
     def list_changes(self, launch_id: str | None = None) -> list[Change]:
         return [c for c in self._changes if launch_id is None or c.launch_id == launch_id]
+
+    def log_event(self, event: dict) -> None:
+        self.events = [*getattr(self, "events", []), dict(event)]     # in memory only: local runs need no log file
+
+    def set_rating(self, reply_ts: str, rating: str) -> bool:
+        hits = [e for e in getattr(self, "events", []) if reply_ts and e.get("reply_ts") == reply_ts]
+        for event in hits:
+            event["rating"] = rating
+        return bool(hits)

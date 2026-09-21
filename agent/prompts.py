@@ -3,7 +3,7 @@ date, the sender, the calendar — goes in the user turn built by `context()`.""
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from agent.schema import Launch, Sender
 from agent.tools import compact
@@ -93,23 +93,35 @@ The final text you write is posted back to chat as is. Keep it short — a few l
 changed (title, dates as real dates, status, size), state any assumption you made so it can be corrected, mention \
 downstream launches the tool flagged, then ask your question(s) if any. If someone is irritated that the calendar \
 was wrong, fix it, confirm in one line, and skip the apology tour. Plain chat formatting: *bold* for titles, \
-simple bullet lines, no headings, no tables. When a tool returns a rendered view, relay it unchanged.
+simple bullet lines, no headings, no tables. When a tool returns a rendered view, relay it unchanged. \
+After any write, code appends an itemized receipt of exactly what was saved, held or not done, so keep your own \
+summary to a sentence or two and never write a receipt yourself. Never offer an action you can't perform: you \
+cannot message, ping, remind or notify anyone — you only keep the calendar.
 """
 
 
-def context(message: str, sender: Sender, now: datetime, launches: list[Launch]) -> str:
+def context(message: str, sender: Sender, now: datetime, launches: list[Launch], thread: str = "") -> str:
     # Ties on last_updated (same minute, or a frozen test clock) break by store order: later record = more recent.
     order = {l.id: i for i, l in enumerate(launches)}
     recency = lambda l: (l.last_updated, order[l.id])
     mine_open = sorted(
         (l for l in launches if l.open_question and l.question_for == sender.id), key=recency, reverse=True,
     )
+    # A reply inside a record's chat thread is about that record: show only its question, not the newest one.
+    here = [l for l in launches if thread and l.thread == thread]
+    if here:
+        mine_open = [l for l in mine_open if l in here]
+    monday = now.date() - timedelta(days=now.weekday())   # week windows in code: the model got "next week" wrong
     touched = sorted((l for l in launches if l.last_updated_by == sender.name), key=recency, reverse=True)[:3]
     parts = [
-        f"Today is {now.strftime('%A, %Y-%m-%d')} ({now.strftime('%H:%M %Z').strip()}).",
+        f"Today is {now.strftime('%A, %Y-%m-%d')} ({now.strftime('%H:%M %Z').strip()}). "
+        f"This week: {monday} (Mon) to {monday + timedelta(days=6)} (Sun). "
+        f"Next week: {monday + timedelta(days=7)} (Mon) to {monday + timedelta(days=13)} (Sun).",
         f"Speaking: {sender.name} (chat id {sender.id}).",
         "Questions you have open with this sender, most recent first (for matching a bare reply to its record — never read these back):\n" + (
             "\n".join(f"- [{l.id}] {l.title}: {l.open_question}" for l in mine_open) or "- none"),
+        *(["This message is a reply in the thread about " + ", ".join(f"[{l.id}] {l.title}" for l in here) +
+           ". A bare reply here is about that record, even if no question is open on it."] if here else []),
         "Records this sender touched most recently: " + (", ".join(f"[{l.id}]" for l in touched) or "none"),
         "Current calendar (JSON, one record per line):\n" + (
             "\n".join(json.dumps(compact(l), ensure_ascii=False) for l in launches) or "(empty)"),

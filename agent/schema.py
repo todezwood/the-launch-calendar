@@ -72,6 +72,7 @@ class Launch:
     # --- Trust / bookkeeping (never writable by the model) ---------------
     open_question: str = ""         # What the agent last asked about this record...
     question_for: str = ""          #   ...and whom. Makes a bare "M" or "next tues" land on the right record.
+    thread: str = ""                # Chat thread this record was last written from; a reply there is about it.
     last_updated: str = ""          # Staleness is the calendar's core failure mode (msg A).
     last_updated_by: str = ""
 

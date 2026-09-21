@@ -30,6 +30,15 @@ class Store(ABC):
     @abstractmethod
     def list_changes(self, launch_id: str | None = None) -> list[Change]: ...
 
+    # The agent log: one row per handled message, for the performance page. Optional — a store
+    # without one simply does not log. Never message text: the Notion page is public.
+    def log_event(self, event: dict) -> None:
+        return None
+
+    def set_rating(self, reply_ts: str, rating: str) -> bool:
+        """Record a 👍/👎 on the reply posted at `reply_ts`. False if that reply is not in the log."""
+        return False
+
     def find(self, text: str) -> list[Launch]:
         """Loose title match, used by the duplicate guard."""
         want = _tokens(text)

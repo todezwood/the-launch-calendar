@@ -60,7 +60,48 @@ def _react(client, event: dict, add: str, remove: str | None = None) -> None:
         pass   # a reaction is a nicety, never a reason to fail
 
 
-def _handle(event: dict, client, say) -> None:
+RESEND_WINDOW = 120    # seconds
+_recent: dict[tuple, tuple[float, str]] = {}    # (user, channel, thread, text) -> (when, receipt) for messages that WROTE
+
+
+def _resend_key(event: dict, text: str) -> tuple:
+    # The raw thread_ts, not the reply thread: a top-level resend has a new ts every time.
+    return (event["user"], event.get("channel", ""), event.get("thread_ts") or "",
+            re.sub(r"\s+", " ", text).strip(" .!?").lower())
+
+
+def _resent(key: tuple) -> str | None:
+    """'No reply, so I sent it again' must not apply "slip it a week" twice. One-shot: a third send goes through."""
+    when, receipt = _recent.pop(key, (0.0, ""))
+    return receipt if time.monotonic() - when < RESEND_WINDOW else None
+
+
+def _remember(key: tuple, receipt: str) -> None:
+    now = time.monotonic()
+    for old in [k for k, (when, _) in _recent.items() if now - when >= RESEND_WINDOW]:
+        del _recent[old]
+    while len(_recent) >= 200:
+        del _recent[next(iter(_recent))]
+    _recent[key] = (now, receipt)
+
+
+def _bot_id(client) -> str:
+    if "bot" not in _names:
+        try:
+            _names["bot"] = client.auth_test()["user_id"]
+        except Exception:
+            return ""
+    return _names["bot"]
+
+
+def _readable(text: str, client, bot: str) -> str:
+    """The bot's own @mention is noise; anyone else's is a name the model needs ("<@U7> owns this now")."""
+    def name(match: re.Match) -> str:
+        return "" if match[1] == bot else "@" + _sender(client, match[1]).name
+    return re.sub(r"\s+", " ", re.sub(r"<@([A-Z0-9]+)(?:\|[^>]*)?>", name, text)).strip()
+
+
+def _handle(event: dict, client, say, bot_id: str | None = None) -> None:
     if event.get("bot_id") or event.get("subtype") or not event.get("user"):
         return                                  # loop guard: never answer bots, edits, joins
     if not _first_time(event):
@@ -68,35 +109,84 @@ def _handle(event: dict, client, say) -> None:
     _react(client, event, "eyes")
     started, ref, outcome, error, tools = time.time(), uuid.uuid4().hex[:8], "ok", "", []
     thread = event.get("thread_ts") or (event["ts"] if event.get("channel_type") != "im" else None)
+    posted, sender, stats = None, event["user"], {"kind": "other"}
     try:
         with _work_lock:
             global _store
             from agent import engine            # lazy: keeps cold-start ack fast
             _store = _store or open_store()
-            text = re.sub(r"<@[A-Z0-9]+>", "", event.get("text", "")).strip()
-            reply = engine.handle(text, _sender(client, event["user"]), datetime.now(TZ), _store)
-            tools = reply.tools_called
-        say(text=reply.text, thread_ts=thread)
-        _react(client, event, "white_check_mark", remove="eyes")
+            text = _readable(event.get("text", ""), client, bot_id or _bot_id(client))
+            key = _resend_key(event, text)
+            # Checked inside the lock: the resend arrives while the first copy is still being handled.
+            already = _resent(key)
+            if already:
+                outcome = "resend_caught"
+                posted = f"Already handled this a moment ago — here's what I saved:\n{already}\nIf you meant it again, send it once more."
+            else:
+                who = _sender(client, event["user"])
+                reply = engine.handle(text, who, datetime.now(TZ), _store,
+                                      thread=f"{event.get('channel', '')}:{thread}" if thread else "")
+                tools, posted, sender = reply.tools_called, reply.text, who.name
+                outcomes = [a["outcome"] for a in reply.actions]
+                stats = {"kind": reply.kind, "writes": sum(o in ("created", "updated") for o in outcomes),
+                         "held": outcomes.count("held_for_dri"),
+                         "dup_refused": sum(o in ("duplicate", "possible_duplicate") for o in outcomes)}
+                if reply.receipt:
+                    _remember(key, reply.receipt)
+                if reply.error:
+                    outcome, error = "partial", reply.error
     except Exception as err:
         outcome, error = "error", f"{type(err).__name__}: {err}"
         traceback.print_exc()
-        # Never the exception text: replies and the change log are readable by others.
-        say(text=f"Something went wrong on my side and nothing was saved — please send that again. (ref {ref})", thread_ts=thread)
-        _react(client, event, "x", remove="eyes")
+        # Never the exception text: replies and the change log are readable by others. And never "nothing
+        # was saved": a failure after a write is still a write.
+        posted = ("Something went wrong on my side. Your change may or may not have been saved — "
+                  f"check the calendar before resending. (ref {ref})")
+    reply_ts = ""
+    try:
+        reply_ts = (say(text=posted, thread_ts=thread) or {}).get("ts", "")
+        _react(client, event, "x" if outcome == "error" else "white_check_mark", remove="eyes")
+    except Exception as err:        # the work is done; a failed post must not be reported as a failed save
+        outcome, error = "say_failed", f"{type(err).__name__}: {err}"
+        traceback.print_exc()
     print(json.dumps({"severity": "ERROR" if error else "INFO", "ref": ref, "event_ts": event.get("ts"),
                       "user": event.get("user"), "latency_ms": int((time.time() - started) * 1000),
                       "tools_called": tools, "outcome": outcome, "error": error}), flush=True)
+    try:    # after the reply, so logging adds no wait — and a failure to log is never a failure to answer
+        _store and _store.log_event({**stats, "when": datetime.now(TZ).isoformat(timespec="seconds"), "sender": sender,
+                                     "resend": outcome == "resend_caught", "error": bool(error), "ref": ref,
+                                     "seconds": round(time.time() - started, 1), "reply_ts": reply_ts})
+    except Exception:
+        traceback.print_exc()
 
 
 @app.event("app_mention")
-def on_mention(event, client, say):
-    _handle(event, client, say)
+def on_mention(event, client, say, context=None):
+    _handle(event, client, say, (context or {}).get("bot_user_id"))
 
 
 @app.event("message")
-def on_message(event, client, say):
+def on_message(event, client, say, context=None):
     if event.get("bot_id") or event.get("subtype"):
         return
     # Every message in the launches channel (and every DM) is for the bot: nobody has to remember the @.
-    _handle(event, client, say)
+    _handle(event, client, say, (context or {}).get("bot_user_id"))
+
+
+_RATINGS = {"+1": "up", "thumbsup": "up", "-1": "down", "thumbsdown": "down"}
+
+
+@app.event("reaction_added")
+def on_reaction(event, client, context=None):
+    """👍 / 👎 on one of the bot's replies is the person agreeing or disagreeing with it. Last one wins;
+    a removed reaction is ignored; any other emoji is ignored."""
+    try:
+        rating = _RATINGS.get(event.get("reaction", "").split("::")[0])       # "+1::skin-tone-3" is still a 👍
+        item, bot = event.get("item", {}), (context or {}).get("bot_user_id") or _bot_id(client)
+        if not rating or item.get("type") != "message" or (event.get("item_user") and event["item_user"] != bot):
+            return
+        global _store
+        _store = _store or open_store()
+        _store.set_rating(item.get("ts", ""), rating)
+    except Exception:
+        traceback.print_exc()
